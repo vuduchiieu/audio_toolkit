@@ -1,7 +1,8 @@
 name: audio_toolkit
 description: "A new Flutter plugin project."
 version: 0.0.1
-homepage:
+homepage: https://github.com/vuduchiieu/audio_tookit
+repository: https://github.com/vuduchiieu/audio_tookit
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
