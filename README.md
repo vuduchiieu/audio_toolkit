@@ -30,13 +30,13 @@ This plugin requires enabling the following permissions:
 
 - Go to **Signing & Capabilities** → **App Sandbox** → Enable **User Selected File** → Choose **Downloads Folder**
 
-![Enable Downloads Folder Access](https://raw.githubusercontent.com/vuduchieu/audio_tookit/main/images/1.jpg)
+![Enable Downloads Folder Access](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/1.jpg)
 
 #### 2. Enable Audio Input in Hardened Runtime
 
 - Go to **Signing & Capabilities** → **Hardened Runtime** → Enable **Audio Input**
 
-![Enable Audio Input](https://raw.githubusercontent.com/vuduchieu/audio_tookit/main/images/2.jpg)
+![Enable Audio Input](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/2.jpg)
 
 #### 3. Add the following permissions to your `Info.plist`
 
