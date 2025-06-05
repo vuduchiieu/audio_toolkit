@@ -1,39 +1,45 @@
-# 🎧 audio_toolkit
+# 🎧 audio toolkit – Flutter Plugin for Screen Capture with System Audio & Microphone Recording + Speech-to-Text Transcription
 
-> **Only supported on macOS 13+**
 
-We are currently developing support for **Windows**, **Android**, and **iOS** platforms.
+> 📦 A Flutter plugin for **macOS 13+** to record **system audio**, **microphone**, and **transcribe voice to text** using built-in speech recognition.
+
+We are currently working on **Windows**, **Android**, and **iOS** support.  
+Perfect for building **voice assistants**, **audio analysis**, and **screen/audio capture apps** on macOS.
+
+---
 
 ## 🧠 Features
 
-- 🎙️ **System Audio Recording**
+- 🎙️ **System Audio Recording (macOS only)**
 - 🎤 **Microphone Recording**
-- 🗣️ **Voice-to-Text Transcription**
-  - Supports full file transcription
-- ⏱️ **Streaming Transcription**
-  - Get text segment by segment as audio is processed
-- 📁 **Full File Recording**
-  - Save audio directly to the Downloads folder
+- 🗣️ **Speech-to-Text Transcription**
+  - Transcribe recorded files to text
+- ⏱️ **Real-time Streaming Transcription**
+  - Get results segment-by-segment as audio is processed
+- 📁 **Save Recordings to File**
+  - Output to Downloads folder as `.wav`
 
-## 🛠️ Setup Instructions
+---
 
-### macOS App Permissions
+## 🛠️ macOS Setup Guide
 
-This plugin requires enabling the following permissions:
+This plugin requires specific permissions & capabilities:
 
-#### 1. Enable access to the Downloads folder via App Sandbox
+### 1. App Sandbox – Downloads Folder Access
+> **Xcode** → **Signing & Capabilities** → **App Sandbox** → Enable **User Selected File** → Add **Downloads Folder**
 
-- Go to **Signing & Capabilities** → **App Sandbox** → Enable **User Selected File** → Choose **Downloads Folder**
+![sandbox config](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/1.jpg)
 
-![audio_toolkit](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/1.jpg)
+---
 
-#### 2. Enable Audio Input in Hardened Runtime
+### 2. Enable Hardened Runtime – Audio Input
+> **Xcode** → **Signing & Capabilities** → **Hardened Runtime** → Enable **Audio Input**
 
-- Go to **Signing & Capabilities** → **Hardened Runtime** → Enable **Audio Input**
+![runtime config](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/2.jpg)
 
-![audio_toolkit](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/2.jpg)
+---
 
-#### 3. Add the following permissions to your `Info.plist`
+### 3. Add Permissions to `Info.plist`
 
 ```xml
 <key>NSMicrophoneUsageDescription</key>
@@ -41,38 +47,50 @@ This plugin requires enabling the following permissions:
 
 <key>NSSpeechRecognitionUsageDescription</key>
 <string>This app uses speech recognition to convert voice to text.</string>
-```
+📦 Installation
+In your pubspec.yaml:
 
-## 📦 Installation
-
-```yaml
+yaml
+Sao chép
+Chỉnh sửa
 dependencies:
   audio_toolkit: <latest_version>
-```
-
 Then run:
 
-```sh
+bash
+Sao chép
+Chỉnh sửa
 flutter pub get
-```
+⚠️ Known Limitations
+✅ Works only on macOS 13+
 
-## ⚠️ Notes
+🔒 Speech recognition does not work in debug mode
+Run your .app via flutter build macos instead of flutter run
 
-- Only works on macOS 13 or higher
-- Requires user permission to access mic, screen, and file system
-- Save file location is currently fixed to the Downloads directory
-- 🔒 **`initTranscribeAudio` only works when building a production app**.  
-  It **does not work in debug mode** (e.g. run via VSCode) because **VSCode does not prompt for speech recognition permission**.  
-  Please build the app using `flutter build macos` and run the `.app` directly.
+📁 File output path is currently fixed to Downloads
 
-## 🔮 Future Plans
+⛔ Screen or system audio permissions may need to be granted manually
 
-- Cross-platform support for Windows, Android, iOS
-- Audio format customization
-- Whisper support for more accurate transcription
+🧭 Use Cases
+🎤 Voice-to-text dictation tools
 
----
+📹 Screen recording with audio overlay
 
-Feel free to contribute or open an issue!
+🎧 Podcast tools and voice editing apps
 
-📍 Maintained by [@vuduchieu](https://github.com/vuduchiieu)
+📊 Real-time voice analysis
+
+🔮 Roadmap
+✅ macOS support (Complete)
+
+⏳ iOS / Android / Windows support
+
+📜 Whisper & multilingual transcription
+
+🎚️ Audio format & output customization
+
+🤝 Contributions
+Feel free to open an issue or submit a pull request.
+Your feedback makes this tool better 💜
+
+Maintained by @vuduchieu
