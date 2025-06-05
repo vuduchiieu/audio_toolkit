@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:audio_toolkit/language_type.dart';
 import 'package:flutter/services.dart';
 import 'audio_toolkit_platform_interface.dart';
 
@@ -7,32 +8,35 @@ final MethodChannel _channel = MethodChannel('audio_toolkit');
 
 class NativeMethodResult {
   final String? errorMessage;
+  final String? text;
+  final String? path;
   final bool result;
 
-  NativeMethodResult({this.errorMessage, required this.result});
+  NativeMethodResult(
+      {this.errorMessage, this.text, required this.result, this.path});
 
   factory NativeMethodResult.fromJson(json) {
     return NativeMethodResult(
-        result: json['result'] == 'true', errorMessage: json['errorMessage']);
+        result: json['result'] == 'true',
+        errorMessage: json['errorMessage'],
+        text: json['text'],
+        path: json['path']);
   }
 }
 
 class AudioToolkit {
-  static AudioToolkit get instance => _getInstance();
-  static AudioToolkit? _instance;
-  static AudioToolkit _getInstance() {
-    _instance ??= AudioToolkit._internal();
-    return _instance!;
-  }
+  static final AudioToolkit _instance = AudioToolkit._internal();
+  static AudioToolkit get instance => _instance;
 
-  factory AudioToolkit() => _getInstance();
+  factory AudioToolkit() => _instance;
 
-  AudioToolkit._internal() {
-    if (Platform.isMacOS) {
-      _channel.setMethodCallHandler(_handleNativeCalls);
-      initRecording();
-      return;
-    }
+  AudioToolkit._internal();
+
+  Future<void> init() async {
+    if (Platform.isMacOS) {}
+    _channel.setMethodCallHandler(_handleNativeCalls);
+    await initRecording();
+    await turnOnSystemRecording();
   }
 
   final StreamController<String> _sentenceDetectedController =
@@ -41,12 +45,8 @@ class AudioToolkit {
   final StreamController<double> _dbAudiodController =
       StreamController.broadcast();
 
-  final StreamController<Map> _transcriptController =
-      StreamController.broadcast();
-
   Stream<String> get onSentenceDetected => _sentenceDetectedController.stream;
   Stream<double> get onDbAudio => _dbAudiodController.stream;
-  Stream<Map> get onTranscript => _transcriptController.stream;
 
   Future<NativeMethodResult> _invokeNativeMethod(String methodName,
       {Map? arguments}) async {
@@ -56,22 +56,29 @@ class AudioToolkit {
 
   Future<NativeMethodResult> initRecording() =>
       _invokeNativeMethod('initRecording');
-  Future<NativeMethodResult> startSystemRecording() =>
-      _invokeNativeMethod('startSystemRecording', arguments: {
-        "language": '',
-      });
-  Future<NativeMethodResult> stopSystemRecording() =>
-      _invokeNativeMethod('stopSystemRecording');
+
+  Future<NativeMethodResult> startRecord() =>
+      _invokeNativeMethod('startRecording');
+  Future<NativeMethodResult> stopRecording() =>
+      _invokeNativeMethod('stopRecording');
+
+  Future<NativeMethodResult> turnOnSystemRecording() =>
+      _invokeNativeMethod('turnOnSystemRecording');
+  Future<NativeMethodResult> turnOffSystemRecording() =>
+      _invokeNativeMethod('turnOffSystemRecording');
 
   Future<NativeMethodResult> startMicRecording() =>
       _invokeNativeMethod('startMicRecording');
   Future<NativeMethodResult> stopMicRecording() =>
       _invokeNativeMethod('stopMicRecording');
 
+  Future<NativeMethodResult> transcribeAudio(
+          String path, LanguageType language) =>
+      _invokeNativeMethod('transcribeAudio',
+          arguments: {"path": path, "language": language.value});
+
   Future<void> _handleNativeCalls(MethodCall call) async {
     switch (call.method) {
-      case 'onTranscript':
-        _transcriptController.add(call.arguments);
       case 'onSentenceDetected':
         final String path = call.arguments['path'];
         _sentenceDetectedController.add(path);
