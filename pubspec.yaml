@@ -2,9 +2,9 @@ name: audio_toolkit
 description: >
   A macOS-only Flutter plugin to record system/microphone audio and transcribe voice to text with real-time speech detection.
 license: MIT
-version: 0.0.5
-homepage: https://github.com/vuduchiieu/audio_tookit
-repository: https://github.com/vuduchiieu/audio_tookit
+version: 0.0.6
+homepage: https://github.com/vuduchiieu/audio_toolkit
+repository: https://github.com/vuduchiieu/audio_toolkit
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -19,6 +19,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+topics:
+  - audio_toolkit
+  - audio
+  - record
+  - flutter
+  - transcription
+  - system-audio
+  - audio-processing
+  - macos
+  - speech-to-text
+  - realtime-audio
 flutter:
   plugin:
     platforms:

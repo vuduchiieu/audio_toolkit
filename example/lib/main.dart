@@ -1,6 +1,6 @@
-import 'package:audio_toolkit_example/cubit/audio_toolkit_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:audio_toolkit_example/cubit/audio_toolkit_cubit.dart';
 
 void main() {
   runApp(const MyApp());
@@ -8,129 +8,137 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: BlocProvider(
-          create: (context) => AudioToolkitCubit()..init(),
-          child: BlocConsumer<AudioToolkitCubit, AudioToolkitState>(
-            listenWhen: (previous, current) {
-              if (previous is AudioToolkitInitial &&
-                  current is AudioToolkitInitial) {
-                return previous.path != current.path;
-              }
-              return true;
-            },
-            listener: (context, state) {
-              if (state is AudioToolkitInitial) {
-                if (state.path.isNotEmpty) {
-                  context.read<AudioToolkitCubit>().transcribeAudio(state.path);
-                  return;
-                }
-                return;
-              }
-            },
-            builder: (context, state) {
-              if (state is AudioToolkitInitial) {
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    if (state.text.isNotEmpty)
-                      Expanded(
-                        child: Container(
-                          margin: EdgeInsets.symmetric(horizontal: 20),
-                          padding: EdgeInsets.all(20),
-                          color: Colors.pinkAccent.shade100,
-                          child: ListView.builder(
-                            itemCount: state.text.length,
-                            reverse: true,
-                            itemBuilder: (context, index) {
-                              return Text(
-                                state.text[index],
-                                style: TextStyle(color: Colors.white),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            if (state.isSystemRecord) {
-                              context
-                                  .read<AudioToolkitCubit>()
-                                  .turnOffSystemRecording();
-                            } else {
-                              context
-                                  .read<AudioToolkitCubit>()
-                                  .turnOnSystemRecording();
-                            }
-                          },
-                          child: Icon(
-                              state.isSystemRecord
-                                  ? Icons.desktop_mac
-                                  : Icons.desktop_access_disabled,
-                              size: 40),
-                        ),
-                        const SizedBox(width: 16),
-                        buildDbMeter(state.db),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () {},
-                          child: Icon(Icons.mic, size: 40),
-                        ),
-                        const SizedBox(width: 16),
-                        buildDbMeter(-160),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      icon: Icon(state.isRecording
-                          ? Icons.stop
-                          : Icons.fiber_manual_record),
-                      label:
-                          Text(state.isRecording ? 'Dừng ghi' : 'Bắt đầu ghi'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            state.isRecording ? Colors.red : Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                      ),
-                      onPressed: () {
-                        final cubit = context.read<AudioToolkitCubit>();
-                        if (state.isRecording) {
-                          cubit.stopRecording();
-                        } else {
-                          cubit.startRecord();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 30),
-                  ],
-                );
-              }
-              return const Center(child: CircularProgressIndicator());
-            },
-          ),
+      home: BlocProvider(
+        create: (_) => AudioToolkitCubit()..init(),
+        child: const AudioToolkitScreen(),
+      ),
+    );
+  }
+}
+
+class AudioToolkitScreen extends StatelessWidget {
+  const AudioToolkitScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: BlocConsumer<AudioToolkitCubit, AudioToolkitState>(
+        listenWhen: (prev, curr) =>
+            prev is AudioToolkitInitial &&
+            curr is AudioToolkitInitial &&
+            prev.path != curr.path,
+        listener: (context, state) {
+          if (state is AudioToolkitInitial && state.path.isNotEmpty) {
+            context.read<AudioToolkitCubit>().transcribeAudio(state.path);
+          }
+        },
+        builder: (context, state) {
+          if (state is! AudioToolkitInitial) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (state.text.isNotEmpty)
+                  Expanded(child: _buildTranscriptionBox(state.text)),
+                const SizedBox(height: 30),
+                _buildRecordingControls(context, state),
+                const SizedBox(height: 16),
+                _buildMicSection(),
+                const SizedBox(height: 16),
+                _buildRecordingButton(context, state),
+                const SizedBox(height: 30),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTranscriptionBox(List<String> text) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.pinkAccent.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListView.builder(
+        reverse: true,
+        itemCount: text.length,
+        itemBuilder: (_, index) => Text(
+          text[index],
+          style: const TextStyle(color: Colors.white),
         ),
       ),
     );
   }
 
-  Widget buildDbMeter(double db) {
+  Widget _buildRecordingControls(
+      BuildContext context, AudioToolkitInitial state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () {
+            final cubit = context.read<AudioToolkitCubit>();
+            state.isSystemRecord
+                ? cubit.turnOffSystemRecording()
+                : cubit.turnOnSystemRecording();
+          },
+          child: Icon(
+            state.isSystemRecord
+                ? Icons.desktop_mac
+                : Icons.desktop_access_disabled,
+            size: 40,
+          ),
+        ),
+        const SizedBox(width: 16),
+        _buildDbMeter(state.db),
+      ],
+    );
+  }
+
+  Widget _buildMicSection() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.mic, size: 40),
+        SizedBox(width: 16),
+        // Hiếu định làm mic riêng ở đây sau, placeholder db -160
+        _buildDbMeter(-160),
+      ],
+    );
+  }
+
+  Widget _buildRecordingButton(
+      BuildContext context, AudioToolkitInitial state) {
+    final isRecording = state.isRecording;
+    final cubit = context.read<AudioToolkitCubit>();
+
+    return ElevatedButton.icon(
+      icon: Icon(isRecording ? Icons.stop : Icons.fiber_manual_record),
+      label: Text(isRecording ? 'Dừng ghi' : 'Bắt đầu ghi'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isRecording ? Colors.red : Colors.green,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      ),
+      onPressed: () =>
+          isRecording ? cubit.stopRecording() : cubit.startRecord(),
+    );
+  }
+
+  static Widget _buildDbMeter(double db) {
     final normalized = ((db + 60).clamp(0, 60)) / 60;
 
     Color getColor() {
