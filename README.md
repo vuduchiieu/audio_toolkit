@@ -9,15 +9,10 @@ We are currently developing support for **Windows**, **Android**, and **iOS** pl
 - 🎙️ **System Audio Recording**
 - 🎤 **Microphone Recording**
 - 🗣️ **Voice-to-Text Transcription**
-
   - Supports full file transcription
-
 - ⏱️ **Streaming Transcription**
-
   - Get text segment by segment as audio is processed
-
 - 📁 **Full File Recording**
-
   - Save audio directly to the Downloads folder
 
 ## 🛠️ Setup Instructions
@@ -66,6 +61,9 @@ flutter pub get
 - Only works on macOS 13 or higher
 - Requires user permission to access mic, screen, and file system
 - Save file location is currently fixed to the Downloads directory
+- 🔒 **`initTranscribeAudio` only works when building a production app**.  
+  It **does not work in debug mode** (e.g. run via VSCode) because **VSCode does not prompt for speech recognition permission**.  
+  Please build the app using `flutter build macos` and run the `.app` directly.
 
 ## 🔮 Future Plans
 

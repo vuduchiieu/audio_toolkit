@@ -68,16 +68,14 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
       if (current is AudioToolkitInitial) {
         emit(current.copyWith(isRecording: true));
       }
-
-      final current0 = state;
-      if (current0 is AudioToolkitInitial) {
-        _sentenceSub = audioToolkit.onSentenceDetected.listen(
-          (path) {
-            print('path: $path');
-            transcribeAudio(path);
-          },
-        );
-      }
+      _sentenceSub = audioToolkit.onSentenceDetected.listen(
+        (path) async {
+          final current0 = state;
+          if (current0 is AudioToolkitInitial) {
+            emit(current0.copyWith(path: path));
+          }
+        },
+      );
     }
   }
 
@@ -89,24 +87,57 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
         emit(current.copyWith(isRecording: false));
       }
       _sentenceSub?.cancel();
+      deleteRecordingFilesExceptFull();
+    }
+  }
+
+  Future<void> deleteRecordingFilesExceptFull() async {
+    final downloadsDir = Directory('${Platform.environment['HOME']}/Downloads');
+    if (await downloadsDir.exists()) {
+      final files = downloadsDir.listSync();
+
+      for (var file in files) {
+        if (file is File) {
+          final name = file.uri.pathSegments.last;
+
+          if (name.startsWith('audioToolkit_') && !name.endsWith('_full.m4a')) {
+            try {
+              await file.delete();
+            } catch (e) {}
+          }
+        }
+      }
     }
   }
 
   Future<void> transcribeAudio(String path) async {
     final res = await audioToolkit.transcribeAudio(path, LanguageType.vi);
-    if (res.result) {
-      final current = state;
-      if (current is AudioToolkitInitial) {
+    final current = state;
+    if (current is AudioToolkitInitial) {
+      if (res.result) {
         final text = res.text;
+        if (text != null) {
+          List<String> updatedText = [text, ...current.text];
+          emit(current.copyWith(text: updatedText));
+        }
+      } else {
+        final text = res.errorMessage;
         if (text != null) {
           List<String> updatedText = [text, ...current.text];
           emit(current.copyWith(text: updatedText));
         }
       }
     }
+
     if (res.path != null) {
-      final file = File(res.path ?? '');
-      await file.delete();
+      try {
+        final file = File(res.path ?? '');
+        await file.delete();
+      } catch (e) {}
+      final current = state;
+      if (current is AudioToolkitInitial) {
+        emit(current.copyWith(path: ''));
+      }
     }
   }
 }

@@ -11,7 +11,23 @@ class AudioToolkitScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       body: BlocProvider(
         create: (context) => AudioToolkitCubit()..init(),
-        child: BlocBuilder<AudioToolkitCubit, AudioToolkitState>(
+        child: BlocConsumer<AudioToolkitCubit, AudioToolkitState>(
+          listenWhen: (previous, current) {
+            if (previous is AudioToolkitInitial &&
+                current is AudioToolkitInitial) {
+              return previous.path != current.path;
+            }
+            return true;
+          },
+          listener: (context, state) {
+            if (state is AudioToolkitInitial) {
+              if (state.path.isNotEmpty) {
+                context.read<AudioToolkitCubit>().transcribeAudio(state.path);
+                return;
+              }
+              return;
+            }
+          },
           builder: (context, state) {
             if (state is AudioToolkitInitial) {
               return Column(
@@ -19,17 +35,24 @@ class AudioToolkitScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (state.text.isNotEmpty)
-                    Container(
-                      height: 300,
-                      color: Colors.amber,
-                      child: ListView.builder(
-                        itemCount: state.text.length,
-                        reverse: true,
-                        itemBuilder: (context, index) {
-                          return Text(state.text[index]);
-                        },
+                    Expanded(
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: 20),
+                        padding: EdgeInsets.all(20),
+                        color: Colors.pinkAccent.shade100,
+                        child: ListView.builder(
+                          itemCount: state.text.length,
+                          reverse: true,
+                          itemBuilder: (context, index) {
+                            return Text(
+                              state.text[index],
+                              style: TextStyle(color: Colors.white),
+                            );
+                          },
+                        ),
                       ),
                     ),
+                  const SizedBox(height: 30),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -46,7 +69,9 @@ class AudioToolkitScreen extends StatelessWidget {
                           }
                         },
                         child: Icon(
-                            state.isSystemRecord ? Icons.mic : Icons.mic_off,
+                            state.isSystemRecord
+                                ? Icons.desktop_mac
+                                : Icons.desktop_access_disabled,
                             size: 40),
                       ),
                       const SizedBox(width: 16),
@@ -75,6 +100,7 @@ class AudioToolkitScreen extends StatelessWidget {
                       }
                     },
                   ),
+                  const SizedBox(height: 30),
                 ],
               );
             }

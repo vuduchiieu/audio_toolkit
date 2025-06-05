@@ -71,6 +71,8 @@ class AudioToolkit {
       _invokeNativeMethod('startMicRecording');
   Future<NativeMethodResult> stopMicRecording() =>
       _invokeNativeMethod('stopMicRecording');
+  Future<NativeMethodResult> initTranscribeAudio() =>
+      _invokeNativeMethod('initTranscribeAudio');
 
   Future<NativeMethodResult> transcribeAudio(
           String path, LanguageType language) =>

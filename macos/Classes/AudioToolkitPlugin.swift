@@ -113,6 +113,18 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
           }
         }
         break
+
+      case "initTranscribeAudio":
+        systemRecorder.initTranscribeAudio { resultCallback in
+          switch resultCallback {
+          case .success:
+            result(["result": "true"])
+          case .failure(let error):
+            result(["result": "false", "errorMessage": error.localizedDescription])
+          }
+        }
+        break
+
       case "transcribeAudio":
         if let args = call.arguments as? [String: Any],
           let path = args["path"] as? String
@@ -277,7 +289,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     case .opus: fileExt = "ogg"
     }
 
-    let fileName = "recording_\(Int(Date().timeIntervalSince1970))\(suffix).\(fileExt)"
+    let fileName = "audioToolkit_\(Int(Date().timeIntervalSince1970))\(suffix).\(fileExt)"
     guard let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
     else {
       throw NSError(
@@ -376,6 +388,40 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   }
 
+  func initTranscribeAudio(completion: @escaping (Result<String, Error>) -> Void) {
+    SFSpeechRecognizer.requestAuthorization { authStatus in
+      DispatchQueue.main.async { [self] in
+        switch authStatus {
+        case .denied:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 401, message: "Người dùng từ chối quyền sử dụng Speech Recognition")))
+          return
+        case .restricted:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 402, message: "Thiết bị không hỗ trợ Speech Recognition")))
+          return
+        case .notDetermined:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 403, message: "Quyền Speech Recognition chưa được yêu cầu"))
+          )
+          return
+        case .authorized:
+          completion(.success("authorized"))
+        @unknown default:
+          completion(
+            .failure(
+              self.makeTranscribeError(code: 406, message: "Trạng thái xác thực không xác định")))
+        }
+      }
+    }
+  }
+
   func transcribeAudio(
     url: URL,
     language: String = "vi-VN",
@@ -400,55 +446,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
               code: 405, message: "❌ Lỗi nhận diện: \(error.localizedDescription)")))
       }
     }
-    // SFSpeechRecognizer.requestAuthorization { authStatus in
-    //   DispatchQueue.main.async { [self] in
-    //     switch authStatus {
-    //     case .denied:
-    //       completion(
-    //         .failure(
-    //           self.makeTranscribeError(
-    //             code: 401, message: "Người dùng từ chối quyền sử dụng Speech Recognition")))
-    //       return
-    //     case .restricted:
-    //       completion(
-    //         .failure(
-    //           self.makeTranscribeError(
-    //             code: 402, message: "Thiết bị không hỗ trợ Speech Recognition")))
-    //       return
-    //     case .notDetermined:
-    //       completion(
-    //         .failure(
-    //           self.makeTranscribeError(
-    //             code: 403, message: "Quyền Speech Recognition chưa được yêu cầu"))
-    //       )
-    //       return
-    //     case .authorized:
-    //       let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
-    //       guard let recognizer = recognizer, recognizer.isAvailable else {
-    //         completion(
-    //           .failure(
-    //             self.makeTranscribeError(code: 404, message: "Speech Recognizer không khả dụng")))
-    //         return
-    //       }
-    //       let request = SFSpeechURLRecognitionRequest(url: url)
-    //       recognizer.recognitionTask(with: request) { result, error in
-    //         if let result = result, result.isFinal {
-    //           completion(.success(result.bestTranscription.formattedString))
-    //         } else if let error = error {
-    //           completion(
-    //             .failure(
-    //               self.makeTranscribeError(
-    //                 code: 405, message: "❌ Lỗi nhận diện: \(error.localizedDescription)")))
-    //         }
-    //       }
-
-    //     @unknown default:
-    //       completion(
-    //         .failure(
-    //           self.makeTranscribeError(code: 406, message: "Trạng thái xác thực không xác định")))
-    //     }
-    //   }
-    // }
   }
 
   func calculateDB(from buffer: AVAudioPCMBuffer) -> Float {
