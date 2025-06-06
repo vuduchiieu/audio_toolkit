@@ -551,7 +551,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     audioEngine = nil
     audioFile = nil
     isSpeaking = false
-    silenceFrameCount = 0
     speakingFrameCount = 0
 
     completion(.success(()))
