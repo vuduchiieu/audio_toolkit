@@ -491,65 +491,52 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   }
 
   func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
-    SFSpeechRecognizer.requestAuthorization { authStatus in
-      if authStatus != .authorized {
-        completion(
-          .failure(
-            self.makeTranscribeError(
-              code: 403, message: "Không có quyền truy cập nhận diện giọng nói")
+    self.audioEngine = AVAudioEngine()
+    self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+    self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN"))
 
-          )
+    guard let inputNode = self.audioEngine?.inputNode,
+      let recognitionRequest = self.recognitionRequest,
+      let recognizer = self.speechRecognizer
+    else {
+      completion(
+        .failure(
+          self.makeTranscribeError(
+            code: 500, message: "Không khởi tạo được audio engine")
         )
-        return
-      }
+      )
+      return
+    }
 
-      self.audioEngine = AVAudioEngine()
-      self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-      self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN"))
+    recognitionRequest.shouldReportPartialResults = true
 
-      guard let inputNode = self.audioEngine?.inputNode,
-        let recognitionRequest = self.recognitionRequest,
-        let recognizer = self.speechRecognizer
-      else {
-        completion(
-          .failure(
-            self.makeTranscribeError(
-              code: 500, message: "Không khởi tạo được audio engine")
-          )
-        )
-        return
-      }
-
-      recognitionRequest.shouldReportPartialResults = true
-
-      self.recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
-        if let result = result {
-          let text = result.bestTranscription.formattedString
-          DispatchQueue.main.async {
-            self.channel?.invokeMethod("onMicText", arguments: ["text": text])
-          }
-        }
-
-        if error != nil {
-          self.turnOffMicRecording { _ in }
-        }
-      }
-
-      let recordingFormat = inputNode.outputFormat(forBus: 0)
-      inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
-        self.recognitionRequest?.append(buffer)
-        let db = self.calculateDB(from: buffer)
+    self.recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
+      if let result = result {
+        let text = result.bestTranscription.formattedString
         DispatchQueue.main.async {
-          self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
+          self.channel?.invokeMethod("onMicText", arguments: ["text": text])
         }
       }
 
-      do {
-        try self.audioEngine?.start()
-        completion(.success(()))
-      } catch {
-        completion(.failure(error))
+      if error != nil {
+        self.turnOffMicRecording { _ in }
       }
+    }
+
+    let recordingFormat = inputNode.outputFormat(forBus: 0)
+    inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
+      self.recognitionRequest?.append(buffer)
+      let db = self.calculateDB(from: buffer)
+      DispatchQueue.main.async {
+        self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
+      }
+    }
+
+    do {
+      try self.audioEngine?.start()
+      completion(.success(()))
+    } catch {
+      completion(.failure(error))
     }
   }
 
