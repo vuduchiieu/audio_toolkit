@@ -544,14 +544,15 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   }
 
   func turnOffMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+
     audioEngine?.stop()
     audioEngine?.inputNode.removeTap(onBus: 0)
-    recognitionRequest?.endAudio()
-    recognitionTask?.cancel()
 
     audioEngine = nil
-    recognitionRequest = nil
-    recognitionTask = nil
+    audioFile = nil
+    isSpeaking = false
+    silenceFrameCount = 0
+    speakingFrameCount = 0
 
     completion(.success(()))
   }
