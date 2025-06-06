@@ -508,7 +508,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
       }
 
-      if db > -45 {
+      if db > -30 {
         if !self.isSpeaking {
           self.isSpeaking = true
           self.startTime = Date()
@@ -524,7 +524,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         let silenceDuration = Double(self.silenceFrameCount) * 1024 / recordingFormat.sampleRate
         let speakingDuration = Date().timeIntervalSince(self.startTime ?? Date())
 
-        if silenceDuration > 0.5 && speakingDuration > 1.5 {
+        if silenceDuration > 0.8 && speakingDuration > 1.5 {
           self.isSpeaking = false
           self.silenceFrameCount = 0
           self.speakingFrameCount = 0
