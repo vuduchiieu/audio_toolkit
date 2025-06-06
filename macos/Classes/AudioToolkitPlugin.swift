@@ -215,6 +215,9 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   var recognitionTask: SFSpeechRecognitionTask?
 
+  var silenceFrameCount: Int = 0
+  let sampleRate: Double = 48000
+
   func initRecording(completion: @escaping (Result<Void, Error>) -> Void) {
 
     SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) {
@@ -552,7 +555,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     audioFile = nil
     isSpeaking = false
     speakingFrameCount = 0
-
+    silenceFrameCount = 0
     completion(.success(()))
   }
 
