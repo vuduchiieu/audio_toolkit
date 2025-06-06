@@ -369,7 +369,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
           print("❌ Ghi vào fullAudioFile lỗi: \(error)")
         }
       }
-      // 1. Khi âm lượng vượt ngưỡng --> bắt đầu nói
       if db > -30 {
         if !isSpeaking {
           isSpeaking = true
@@ -379,11 +378,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         }
         speakingFrameCount += 1
         silenceFrameCount = 0
-
-        // Viết buffer vào file nếu đang ghi
         try? audioFile?.write(from: pcmBuffer)
       } else if isSpeaking {
-        // 2. Khi âm lượng dưới ngưỡng trong một thời gian --> kết thúc câu
         silenceFrameCount += 1
 
         let silenceDuration = Double(silenceFrameCount) * 1024 / sampleRate
@@ -393,8 +389,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
           isSpeaking = false
           silenceFrameCount = 0
           speakingFrameCount = 0
-
-          // Đóng file hiện tại và gửi
           let url = audioFile?.url
           self.audioFile = try? prepareAudioFile()
           DispatchQueue.main.async {
@@ -486,13 +480,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
     self.audioEngine = AVAudioEngine()
-    self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-    self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN"))
 
-    guard let inputNode = self.audioEngine?.inputNode,
-      let recognitionRequest = self.recognitionRequest,
-      let recognizer = self.speechRecognizer
-    else {
+    guard let inputNode = self.audioEngine?.inputNode else {
       completion(
         .failure(
           self.makeTranscribeError(
@@ -502,27 +491,47 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       return
     }
 
-    recognitionRequest.shouldReportPartialResults = true
-
-    self.recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
-      if let result = result {
-        let text = result.bestTranscription.formattedString
-        DispatchQueue.main.async {
-          self.channel?.invokeMethod("onMicText", arguments: ["text": text])
-        }
-      }
-
-      if error != nil {
-        self.turnOffMicRecording { _ in }
-      }
+    do {
+      self.audioFile = try prepareAudioFile()
+    } catch {
+      completion(.failure(error))
+      return
     }
 
     let recordingFormat = inputNode.outputFormat(forBus: 0)
     inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
-      self.recognitionRequest?.append(buffer)
       let db = self.calculateDB(from: buffer)
       DispatchQueue.main.async {
         self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
+      }
+
+      if db > -30 {
+        if !self.isSpeaking {
+          self.isSpeaking = true
+          self.startTime = Date()
+          self.silenceFrameCount = 0
+          self.speakingFrameCount = 0
+        }
+        self.speakingFrameCount += 1
+        self.silenceFrameCount = 0
+        try? self.audioFile?.write(from: buffer)
+      } else if self.isSpeaking {
+        self.silenceFrameCount += 1
+
+        let silenceDuration = Double(self.silenceFrameCount) * 1024 / recordingFormat.sampleRate
+        let speakingDuration = Date().timeIntervalSince(self.startTime ?? Date())
+
+        if silenceDuration > 0.8 && speakingDuration > 1.5 {
+          self.isSpeaking = false
+          self.silenceFrameCount = 0
+          self.speakingFrameCount = 0
+
+          let url = self.audioFile?.url
+          self.audioFile = try? self.prepareAudioFile(suffix: "_mic")
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onMicAudioFile", arguments: ["path": url?.path])
+          }
+        }
       }
     }
 
