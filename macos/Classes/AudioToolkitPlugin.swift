@@ -382,7 +382,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
             try file.write(from: pcmBuffer)
 
             if let start = startTime,
-              Date().timeIntervalSince(start) >= 3.0,
+              Date().timeIntervalSince(start) >= 1.5,
               speakingFrameCount >= 10
             {
               let url = file.url
