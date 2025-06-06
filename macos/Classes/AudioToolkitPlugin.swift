@@ -369,7 +369,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
           print("❌ Ghi vào fullAudioFile lỗi: \(error)")
         }
       }
-      if db > -35 {
+      if db > -25 {
         if !isSpeaking {
           isSpeaking = true
           startTime = Date()
