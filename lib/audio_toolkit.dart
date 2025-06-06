@@ -47,26 +47,26 @@ class AudioToolkit {
 
   AudioToolkit._internal();
 
-  final StreamController<String> _sentenceDetectedController =
+  final StreamController<String> _onSystemAudioFileController =
       StreamController.broadcast();
 
   final StreamController<double> _dbAudiodController =
       StreamController.broadcast();
 
-  final StreamController<String> _micTextController =
+  final StreamController<String> _onMicAudioFileController =
       StreamController.broadcast();
 
   final StreamController<double> _micDbController =
       StreamController.broadcast();
 
   /// Stream phát hiện đoạn âm thanh từ hệ thống đã được ghi thành file.
-  Stream<String> get onSentenceDetected => _sentenceDetectedController.stream;
+  Stream<String> get onSystemAudio => _onSystemAudioFileController.stream;
 
   /// Stream đo mức âm lượng (dB) của hệ thống.
   Stream<double> get onDbAudio => _dbAudiodController.stream;
 
   /// Stream phát ra văn bản được nhận dạng từ mic.
-  Stream<String> get onMicText => _micTextController.stream;
+  Stream<String> get onMicAudio => _onMicAudioFileController.stream;
 
   /// Stream đo mức âm lượng (dB) từ mic.
   Stream<double> get onMicDb => _micDbController.stream;
@@ -131,12 +131,12 @@ class AudioToolkit {
     switch (call.method) {
       case 'onSystemAudioFile':
         final String path = call.arguments['path'];
-        _sentenceDetectedController.add(path);
+        _onSystemAudioFileController.add(path);
         break;
 
-      case 'onMicText':
-        final String text = call.arguments['text'];
-        _micTextController.add(text);
+      case 'onMicAudioFile':
+        final String path = call.arguments['path'];
+        _onMicAudioFileController.add(path);
         break;
 
       case 'dbMic':

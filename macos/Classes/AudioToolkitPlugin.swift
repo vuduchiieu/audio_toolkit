@@ -492,7 +492,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
 
     do {
-      self.audioFile = try prepareAudioFile()
+      self.audioFile = try prepareAudioFile(suffix: "_mic")
     } catch {
       completion(.failure(error))
       return
