@@ -369,44 +369,38 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
           print("❌ Ghi vào fullAudioFile lỗi: \(error)")
         }
       }
-      if db > -25 {
+      // 1. Khi âm lượng vượt ngưỡng --> bắt đầu nói
+      if db > -30 {
         if !isSpeaking {
           isSpeaking = true
           startTime = Date()
+          silenceFrameCount = 0
           speakingFrameCount = 0
         }
         speakingFrameCount += 1
+        silenceFrameCount = 0
 
-        if isRecording, let file = audioFile {
-          do {
-            try file.write(from: pcmBuffer)
+        // Viết buffer vào file nếu đang ghi
+        try? audioFile?.write(from: pcmBuffer)
+      } else if isSpeaking {
+        // 2. Khi âm lượng dưới ngưỡng trong một thời gian --> kết thúc câu
+        silenceFrameCount += 1
 
-            if let start = startTime,
-              Date().timeIntervalSince(start) >= 1.5,
-              speakingFrameCount >= 10
-            {
-              let url = file.url
-              self.audioFile = nil
-              do {
-                self.audioFile = try prepareAudioFile()
-              } catch {
-                print("❌ Lỗi tạo file mới sau câu: \(error.localizedDescription)")
-                return
-              }
+        let silenceDuration = Double(silenceFrameCount) * 1024 / sampleRate
+        let speakingDuration = Date().timeIntervalSince(startTime ?? Date())
 
-              DispatchQueue.main.async {
-                self.channel?.invokeMethod("onSystemAudioFile", arguments: ["path": url.path])
-              }
-              isSpeaking = false
-            }
-          } catch {
-            print("❌ Ghi vào file lỗi: \(error)")
+        if silenceDuration > 0.8 && speakingDuration > 1.5 {
+          isSpeaking = false
+          silenceFrameCount = 0
+          speakingFrameCount = 0
+
+          // Đóng file hiện tại và gửi
+          let url = audioFile?.url
+          self.audioFile = try? prepareAudioFile()
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onSystemAudioFile", arguments: ["path": url?.path])
           }
         }
-
-      } else {
-        isSpeaking = false
-        speakingFrameCount = 0
       }
 
     }
