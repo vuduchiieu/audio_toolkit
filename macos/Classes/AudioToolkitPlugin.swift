@@ -199,24 +199,16 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   enum AudioFormat: String {
     case aac, alac, flac, opus
   }
-  var isSpeaking = false
   var stream: SCStream?
   var audioFile: AVAudioFile?
   var fullAudioFile: AVAudioFile?
   var audioSettings: [String: Any] = [:]
   var selectedFormat: AudioFormat = .aac
   var filter: SCContentFilter?
-  var startTime: Date?
-  var speakingFrameCount: Int = 0
   var isRecording = false
 
   var audioEngine: AVAudioEngine?
-  var speechRecognizer: SFSpeechRecognizer?
-  var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   var recognitionTask: SFSpeechRecognitionTask?
-
-  var silenceFrameCount: Int = 0
-  let sampleRate: Double = 48000
 
   func initRecording(completion: @escaping (Result<Void, Error>) -> Void) {
 
@@ -354,54 +346,73 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       print("❌ Lỗi khi start SCStream: \(error)")
     }
   }
+  var isSpeaking = false
+  var silenceFrameCount = 0
+  var speakingFrameCount = 0
+  let sampleRate: Double = 48000  // hoặc lấy từ format
+  let silenceThresholdDB: Float = -35
+  let minSpeakingDuration = 0.6
+  let maxSilenceDuration = 0.5
+  var startTime: Date?
+
   func stream(
     _: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
     of outputType: SCStreamOutputType
   ) {
     guard outputType == .audio else { return }
 
-    if let pcmBuffer = sampleBuffer.toPCMBuffer() {
-      let db: Float = self.calculateDB(from: pcmBuffer)
-      DispatchQueue.main.async {
-        self.channel?.invokeMethod("db", arguments: String(db))
-      }
-      if let fullFile = fullAudioFile {
-        do {
-          try fullFile.write(from: pcmBuffer)
-        } catch {
-          print("❌ Ghi vào fullAudioFile lỗi: \(error)")
-        }
-      }
-      if db > -30 {
-        if !isSpeaking {
-          isSpeaking = true
-          startTime = Date()
-          silenceFrameCount = 0
-          speakingFrameCount = 0
-        }
-        speakingFrameCount += 1
+    guard let pcmBuffer = sampleBuffer.toPCMBuffer() else { return }
+
+    let db: Float = self.calculateDB(from: pcmBuffer)
+    DispatchQueue.main.async {
+      self.channel?.invokeMethod("db", arguments: String(db))
+    }
+
+    if let fullFile = fullAudioFile {
+      try? fullFile.write(from: pcmBuffer)
+    }
+    guard isRecording else { return }
+
+    if db > silenceThresholdDB {
+      if !isSpeaking {
+        isSpeaking = true
+        startTime = Date()
         silenceFrameCount = 0
-        try? audioFile?.write(from: pcmBuffer)
-      } else if isSpeaking {
-        silenceFrameCount += 1
+        speakingFrameCount = 0
 
-        let silenceDuration = Double(silenceFrameCount) * 1024 / sampleRate
-        let speakingDuration = Date().timeIntervalSince(startTime ?? Date())
+        // tạo file mới nếu chưa có
+        if audioFile == nil {
+          audioFile = try? prepareAudioFile()
+        }
+      }
 
-        if silenceDuration > 0.8 && speakingDuration > 1.5 {
-          isSpeaking = false
-          silenceFrameCount = 0
-          speakingFrameCount = 0
-          let url = audioFile?.url
-          self.audioFile = try? prepareAudioFile()
+      speakingFrameCount += 1
+      silenceFrameCount = 0
+
+      try? audioFile?.write(from: pcmBuffer)
+
+    } else if isSpeaking {
+      // đang im lặng sau khi nói
+      silenceFrameCount += 1
+
+      let silenceDuration = Double(silenceFrameCount) * 1024 / sampleRate
+      let speakingDuration = Date().timeIntervalSince(startTime ?? Date())
+
+      if silenceDuration > maxSilenceDuration && speakingDuration > minSpeakingDuration {
+        isSpeaking = false
+        silenceFrameCount = 0
+        speakingFrameCount = 0
+
+        // đóng file & gửi về Flutter
+        if let file = audioFile {
+          let path = file.url.path
+          audioFile = try? prepareAudioFile()  // chuẩn bị file tiếp theo
           DispatchQueue.main.async {
-            self.channel?.invokeMethod("onSystemAudioFile", arguments: ["path": url?.path])
+            self.channel?.invokeMethod("onSystemAudioFile", arguments: ["path": path])
           }
         }
       }
-
     }
-
   }
 
   func initTranscribeAudio(completion: @escaping (Result<String, Error>) -> Void) {
@@ -494,13 +505,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       return
     }
 
-    do {
-      self.audioFile = try prepareAudioFile(suffix: "_mic")
-    } catch {
-      completion(.failure(error))
-      return
-    }
-
     let recordingFormat = inputNode.outputFormat(forBus: 0)
     inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
       let db = self.calculateDB(from: buffer)
@@ -508,34 +512,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
       }
 
-      if db > -30 {
-        if !self.isSpeaking {
-          self.isSpeaking = true
-          self.startTime = Date()
-          self.silenceFrameCount = 0
-          self.speakingFrameCount = 0
-        }
-        self.speakingFrameCount += 1
-        self.silenceFrameCount = 0
-        try? self.audioFile?.write(from: buffer)
-      } else if self.isSpeaking {
-        self.silenceFrameCount += 1
-
-        let silenceDuration = Double(self.silenceFrameCount) * 1024 / recordingFormat.sampleRate
-        let speakingDuration = Date().timeIntervalSince(self.startTime ?? Date())
-
-        if silenceDuration > 0.8 && speakingDuration > 1.5 {
-          self.isSpeaking = false
-          self.silenceFrameCount = 0
-          self.speakingFrameCount = 0
-
-          let url = self.audioFile?.url
-          self.audioFile = try? self.prepareAudioFile(suffix: "_mic")
-          DispatchQueue.main.async {
-            self.channel?.invokeMethod("onMicAudioFile", arguments: ["path": url?.path])
-          }
-        }
-      }
     }
 
     do {
@@ -550,10 +526,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     audioEngine?.stop()
     audioEngine?.inputNode.removeTap(onBus: 0)
     audioEngine = nil
-    audioFile = nil
-    isSpeaking = false
-    speakingFrameCount = 0
-    silenceFrameCount = 0
+
     completion(.success(()))
   }
 

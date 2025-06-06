@@ -162,4 +162,14 @@ class AudioToolkit {
   Future<String?> getPlatformVersion() {
     return AudioToolkitPlatform.instance.getPlatformVersion();
   }
+
+  Future<void> dispose() async {
+    _onSystemAudioFileController.close();
+    _dbAudiodController.close();
+    _onMicAudioFileController.close();
+    _micDbController.close();
+
+    await Future.wait(
+        [stopRecording(), turnOffMicRecording(), turnOffSystemRecording()]);
+  }
 }

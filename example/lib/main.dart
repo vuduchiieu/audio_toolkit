@@ -3,11 +3,16 @@ import 'dart:io';
 
 import 'package:audio_toolkit/audio_toolkit.dart';
 import 'package:audio_toolkit/language_type.dart';
+import 'package:audio_toolkit_example/repo.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 
-void main() {
+void main() async {
+  await dotenv.load(fileName: ".env");
+
   runApp(const MyApp());
 }
 
@@ -33,117 +38,148 @@ class AudioToolkitScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: BlocConsumer<AudioToolkitCubit, AudioToolkitState>(
-        listenWhen: (prev, curr) =>
-            prev is AudioToolkitInitial &&
-            curr is AudioToolkitInitial &&
-            prev.path != curr.path,
-        listener: (context, state) {
-          if (state is AudioToolkitInitial && state.path.isNotEmpty) {
-            context.read<AudioToolkitCubit>().transcribeAudio(state.path);
-          }
-        },
-        builder: (context, state) {
-          if (state is! AudioToolkitInitial) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: BlocProvider(
+        create: (context) => AudioToolkitCubit()..init(),
+        child: BlocConsumer<AudioToolkitCubit, AudioToolkitState>(
+          listenWhen: (previous, current) {
+            if (previous is AudioToolkitInitial &&
+                current is AudioToolkitInitial) {
+              return previous.path != current.path;
+            }
+            return true;
+          },
+          listener: (context, state) {
+            if (state is AudioToolkitInitial) {
+              if (state.path.isNotEmpty) {
+                // context
+                //     .read<AudioToolkitCubit>()
+                //     .transcribeAudioWhisper(state.path);
+                return;
+              }
+              return;
+            }
+          },
+          builder: (context, state) {
+            if (state is AudioToolkitInitial) {
+              final isRecording = state.isRecording;
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (state.text.isNotEmpty)
-                  Expanded(child: _buildTranscriptionBox(state.text)),
-                const SizedBox(height: 30),
-                _buildRecordingControls(context, state),
-                const SizedBox(height: 16),
-                _buildMicSection(),
-                const SizedBox(height: 16),
-                _buildRecordingButton(context, state),
-                const SizedBox(height: 30),
-              ],
-            ),
-          );
-        },
+              final cubit = context.read<AudioToolkitCubit>();
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  state.isSystemRecord
+                                      ? cubit.turnOffSystemRecording()
+                                      : cubit.turnOnSystemRecording();
+                                },
+                                child: Icon(
+                                  state.isSystemRecord
+                                      ? Icons.desktop_mac
+                                      : Icons.desktop_access_disabled,
+                                  size: 40,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              _buildDbMeter(state.db),
+                            ],
+                          ),
+                          SizedBox(
+                            height: 15,
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  state.isMicRecord
+                                      ? cubit.turnOffMicRecording()
+                                      : cubit.turnOnMicRecording();
+                                },
+                                child: Icon(
+                                  state.isMicRecord ? Icons.mic : Icons.mic_off,
+                                  size: 40,
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              _buildDbMeter(state.dbMic),
+                            ],
+                          ),
+                          SizedBox(
+                            height: 15,
+                          ),
+                          ElevatedButton.icon(
+                            icon: Icon(isRecording
+                                ? Icons.stop
+                                : Icons.fiber_manual_record),
+                            label:
+                                Text(isRecording ? 'Dừng ghi' : 'Bắt đầu ghi'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  isRecording ? Colors.red : Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 12),
+                            ),
+                            onPressed: () => isRecording
+                                ? cubit.stopRecording()
+                                : cubit.startRecord(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (state.text.isNotEmpty)
+                      Expanded(
+                          child: Row(
+                        children: [
+                          _buildTranscriptionBox(state.prevText),
+                          SizedBox(
+                            width: 10,
+                          ),
+                          _buildTranscriptionBox(state.text)
+                        ],
+                      )),
+                  ],
+                ),
+              );
+            }
+            return const Center(child: CircularProgressIndicator());
+          },
+        ),
       ),
     );
   }
 
   Widget _buildTranscriptionBox(List<String> text) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.pinkAccent.shade100,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListView.builder(
-        reverse: true,
-        itemCount: text.length,
-        itemBuilder: (_, index) => Text(
-          text[index],
-          style: const TextStyle(color: Colors.white),
+    return Expanded(
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.pinkAccent.shade100,
+          borderRadius: BorderRadius.circular(8),
         ),
-      ),
-    );
-  }
-
-  Widget _buildRecordingControls(
-      BuildContext context, AudioToolkitInitial state) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: () {
-            final cubit = context.read<AudioToolkitCubit>();
-            state.isSystemRecord
-                ? cubit.turnOffSystemRecording()
-                : cubit.turnOnSystemRecording();
-          },
-          child: Icon(
-            state.isSystemRecord
-                ? Icons.desktop_mac
-                : Icons.desktop_access_disabled,
-            size: 40,
+        child: ListView.builder(
+          itemCount: text.length,
+          shrinkWrap: false,
+          itemBuilder: (_, index) => Text(
+            text[index],
+            style: const TextStyle(color: Colors.white),
           ),
         ),
-        const SizedBox(width: 16),
-        _buildDbMeter(state.db),
-      ],
-    );
-  }
-
-  Widget _buildMicSection() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.mic, size: 40),
-        SizedBox(width: 16),
-        // Hiếu định làm mic riêng ở đây sau, placeholder db -160
-        _buildDbMeter(-160),
-      ],
-    );
-  }
-
-  Widget _buildRecordingButton(
-      BuildContext context, AudioToolkitInitial state) {
-    final isRecording = state.isRecording;
-    final cubit = context.read<AudioToolkitCubit>();
-
-    return ElevatedButton.icon(
-      icon: Icon(isRecording ? Icons.stop : Icons.fiber_manual_record),
-      label: Text(isRecording ? 'Dừng ghi' : 'Bắt đầu ghi'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isRecording ? Colors.red : Colors.green,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
-      onPressed: () =>
-          isRecording ? cubit.stopRecording() : cubit.startRecord(),
     );
   }
 
-  static Widget _buildDbMeter(double db) {
+  Widget _buildDbMeter(double db) {
     final normalized = ((db + 60).clamp(0, 60)) / 60;
 
     Color getColor() {
@@ -159,10 +195,10 @@ class AudioToolkitScreen extends StatelessWidget {
         const SizedBox(height: 6),
         Container(
           width: 240,
-          height: 14,
+          height: 15,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.black26),
-            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: getColor()),
+            borderRadius: BorderRadius.circular(999),
           ),
           child: Align(
             alignment: Alignment.centerLeft,
@@ -185,33 +221,44 @@ class AudioToolkitScreen extends StatelessWidget {
 class AudioToolkitCubit extends Cubit<AudioToolkitState> {
   final audioToolkit = AudioToolkit.instance;
   StreamSubscription? _dbSub;
+  StreamSubscription? _dbMicSub;
   StreamSubscription? _sentenceSub;
+  StreamSubscription? _sentenceMicSub;
+
+  final List<File> _fileQueue = [];
+  bool _isProcessing = false;
+  final repo = AudioToolkitRepo();
 
   AudioToolkitCubit()
       : super(AudioToolkitInitial(
             db: 0.0,
             isRecording: false,
+            isMicRecord: false,
             text: [],
+            prevText: [],
+            dbMic: 0.0,
             path: '',
             isSystemRecord: true));
 
   Future<void> init() async {
-    await Future.wait([
-      audioToolkit.init(),
-      audioToolkit.turnOnSystemRecording(),
-      audioToolkit.turnOnMicRecording(),
-    ]);
+    await audioToolkit.init();
+    await audioToolkit.turnOnSystemRecording();
+    await audioToolkit.turnOnMicRecording();
+
     _dbSub = audioToolkit.onDbAudio.listen((db) {
       final current = state;
       if (current is AudioToolkitInitial) {
-        _dbSub = audioToolkit.onDbAudio.listen((db) {
-          final current = state;
-          if (current is AudioToolkitInitial) {
-            emit(current.copyWith(db: db, isSystemRecord: true));
-          }
-        });
+        emit(current.copyWith(db: db, isSystemRecord: true));
       }
     });
+    _dbMicSub = audioToolkit.onMicDb.listen(
+      (db) {
+        final current = state;
+        if (current is AudioToolkitInitial) {
+          emit(current.copyWith(dbMic: db, isMicRecord: true));
+        }
+      },
+    );
   }
 
   Future<void> turnOffSystemRecording() async {
@@ -231,26 +278,89 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
       _dbSub = audioToolkit.onDbAudio.listen((db) {
         final current = state;
         if (current is AudioToolkitInitial) {
-          emit(current.copyWith(
-            db: db,
-          ));
+          emit(current.copyWith(db: db, isSystemRecord: true));
         }
       });
     }
   }
 
+  Future<void> turnOffMicRecording() async {
+    final res = await audioToolkit.turnOffMicRecording();
+    if (res.result) {
+      final current = state;
+      if (current is AudioToolkitInitial) {
+        emit(current.copyWith(dbMic: -160, isMicRecord: false));
+        _dbMicSub?.cancel();
+      }
+    }
+  }
+
+  Future<void> turnOnMicRecording() async {
+    final res = await audioToolkit.turnOnMicRecording();
+    if (res.result) {
+      _dbMicSub = audioToolkit.onMicDb.listen(
+        (db) {
+          final current = state;
+          if (current is AudioToolkitInitial) {
+            emit(current.copyWith(dbMic: db, isMicRecord: true));
+          }
+        },
+      );
+    }
+  }
+
   Future<void> startRecord() async {
+    final current0 = state;
+    if (current0 is AudioToolkitInitial) {
+      // List<String> updatedText = [...latest.text, translated];
+      // emit(latest.copyWith(text: updatedText));
+
+      // final translated2 = await repo.translateWithOpenAI(
+      //     updatedText.join(), LanguageType.vi);
+
+      emit(
+        current0.copyWith(
+          text: [
+            '[${DateFormat.Hms().format(DateTime.now())}] Ấn start record',
+            ...current0.text
+          ],
+        ),
+      );
+    }
+    final current = state;
+    if (current is AudioToolkitInitial) {
+      emit(current.copyWith(isRecording: true));
+    }
     final res = await audioToolkit.startRecord();
     if (res.result) {
       final current = state;
       if (current is AudioToolkitInitial) {
         emit(current.copyWith(isRecording: true));
       }
-      _sentenceSub = audioToolkit.onSentenceDetected.listen(
+      _sentenceSub = audioToolkit.onSystemAudio.listen(
         (path) async {
           final current0 = state;
           if (current0 is AudioToolkitInitial) {
             emit(current0.copyWith(path: path));
+            final file = File(path);
+
+            await waitForFileStable(file);
+
+            _fileQueue.add(file);
+            transcribeAudioWhisper(path);
+          }
+        },
+      );
+
+      _sentenceMicSub = audioToolkit.onMicAudio.listen(
+        (path) async {
+          final current0 = state;
+          if (current0 is AudioToolkitInitial) {
+            emit(current0.copyWith(path: path));
+            // final file = File(path);
+            // await waitForFileStable(file);
+            // _fileQueue.add(file);
+            // transcribeAudioWhisper(path);
           }
         },
       );
@@ -265,6 +375,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
         emit(current.copyWith(isRecording: false));
       }
       _sentenceSub?.cancel();
+      _sentenceMicSub?.cancel();
       deleteRecordingFilesExceptFull();
     }
   }
@@ -285,6 +396,86 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
           }
         }
       }
+    }
+  }
+
+  Future<void> waitForFileStable(File file,
+      {Duration timeout = const Duration(seconds: 3)}) async {
+    final startTime = DateTime.now();
+    int lastSize = 0;
+
+    while (DateTime.now().difference(startTime) < timeout) {
+      final currentSize = await file.length();
+      if (currentSize > 0 && currentSize == lastSize) {
+        return;
+      }
+      lastSize = currentSize;
+      await Future.delayed(Duration(milliseconds: 200));
+    }
+  }
+
+  Future<void> transcribeAudioWhisper(String path) async {
+    if (_isProcessing || _fileQueue.isEmpty) return;
+
+    _isProcessing = true;
+    final file = _fileQueue.removeAt(0);
+
+    try {
+      final String? message = await repo.transcribeWithWhisper(
+        file,
+      );
+
+      if (message != null) {
+        final cleaned = message.trim();
+
+        final current = state;
+        if (current is AudioToolkitInitial) {
+          emit(
+            current.copyWith(
+              prevText: [
+                '[${DateFormat.Hms().format(DateTime.now())}] $message',
+                ...current.prevText
+              ],
+            ),
+          );
+        }
+
+        final isBlocked = listBlock.any(
+            (blocked) => cleaned.toLowerCase() == blocked.trim().toLowerCase());
+
+        if (!isBlocked) {
+          final translated =
+              await repo.translateWithOpenAI(cleaned, LanguageType.vi);
+          if (translated != null) {
+            final current = state;
+            if (current is AudioToolkitInitial) {
+              // List<String> updatedText = [...latest.text, translated];
+              // emit(latest.copyWith(text: updatedText));
+
+              // final translated2 = await repo.translateWithOpenAI(
+              //     updatedText.join(), LanguageType.vi);
+
+              emit(
+                current.copyWith(
+                  text: [
+                    '[${DateFormat.Hms().format(DateTime.now())}] $translated',
+                    ...current.text
+                  ],
+                ),
+              );
+            }
+          }
+        } else {
+          print("🚫 Bỏ qua câu bị chặn: $cleaned");
+        }
+      }
+    } catch (e) {
+    } finally {
+      _isProcessing = false;
+      try {
+        // await file.delete();
+      } catch (e) {}
+      transcribeAudioWhisper(path);
     }
   }
 
@@ -318,6 +509,16 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
       }
     }
   }
+
+  @override
+  Future<void> close() async {
+    _dbSub?.cancel();
+    _dbMicSub?.cancel();
+    _sentenceMicSub?.cancel();
+    _sentenceSub?.cancel();
+    audioToolkit.dispose();
+    return super.close();
+  }
 }
 
 sealed class AudioToolkitState extends Equatable {
@@ -331,33 +532,76 @@ final class InitState extends AudioToolkitState {}
 
 final class AudioToolkitInitial extends AudioToolkitState {
   final List<String> text;
+  final List<String> prevText;
   final bool isRecording;
   final bool isSystemRecord;
+  final bool isMicRecord;
   final double db;
+  final double dbMic;
   final String path;
-  const AudioToolkitInitial({
-    required this.isRecording,
-    required this.text,
-    required this.db,
-    required this.isSystemRecord,
-    required this.path,
-  });
+  const AudioToolkitInitial(
+      {required this.isRecording,
+      required this.text,
+      required this.prevText,
+      required this.db,
+      required this.dbMic,
+      required this.isSystemRecord,
+      required this.path,
+      required this.isMicRecord});
 
-  AudioToolkitInitial copyWith({
-    bool? isRecording,
-    bool? isSystemRecord,
-    double? db,
-    List<String>? text,
-    String? path,
-  }) {
+  AudioToolkitInitial copyWith(
+      {bool? isRecording,
+      bool? isSystemRecord,
+      double? db,
+      List<String>? text,
+      List<String>? prevText,
+      String? path,
+      double? dbMic,
+      bool? isMicRecord}) {
     return AudioToolkitInitial(
         text: text ?? this.text,
         isSystemRecord: isSystemRecord ?? this.isSystemRecord,
         isRecording: isRecording ?? this.isRecording,
         db: db ?? this.db,
+        dbMic: dbMic ?? this.dbMic,
+        isMicRecord: isMicRecord ?? this.isMicRecord,
+        prevText: prevText ?? this.prevText,
         path: path ?? this.path);
   }
 
   @override
-  List<Object> get props => [isRecording, db, text, path];
+  List<Object> get props => [
+        isRecording,
+        db,
+        text,
+        path,
+        isSystemRecord,
+        isMicRecord,
+        dbMic,
+        prevText
+      ];
 }
+
+List<String> listBlock = [
+  "Các bạn hãy đăng kí cho kênh lalaschool Để không bỏ lỡ những video hấp dẫn",
+  "Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ những video hấp dẫn",
+  "Hẹn gặp lại các bạn trong những video tiếp theo nhé",
+  "Phụ đề được thực hiện bởi cộng đồng Amara.org",
+  "Hẹn gặp lại các bạn trong những video tiếp theo",
+  "Hẹn gặp lại các bạn trong những video tiếp theo nhé!",
+  "Cảm ơn và hẹn gặp lại.",
+  "HẸN ĐẠI GIA ĐÌNH VIDEO TIẾP THEO NHÉ CÁC BẠN ^^",
+  "Hẹn gặp lại các bạn trong những video tiếp theo nhé!",
+  "Chào đại gia đình",
+  "HẸN GẶP LẠI NHỚ ĐĂNG KÍ KÊNH NHÉ!!!",
+  "Hẹn gặp lại các bạn trong những video tiếp theo nhé.",
+  "CẢM ƠN KHÁN GIẢ ĐÃ THEO DÕI CỦA CÁC BẠN",
+  "Nhớ like, share và đăng ký kênh của mình nhé!",
+  "Hãy subscribe cho kênh La La School Để không bỏ lỡ những video hấp dẫn",
+  "Đừng quên đăng kí cho kênh lalaschool Để không bỏ lỡ những video hấp dẫn",
+  "CẢM ƠN KHÁN GIẢ ĐẠI GIA ĐÌNH VÀ CÁC BẠN ĐÃ THEO DÕI VÀ ĐĂNG KÝ KÊNH",
+  "HẸN ĐẠI GIA ĐÌNH THÂN THƯƠNG",
+  "HÃY ĐĂNG KÍ KÊNH NHÉ ĐẠI GIA ĐÌNH ^^",
+  "Hẹn gặp lại các bạn trong những video tiếp theo!",
+  "HẸN CÁC BẠN ĐẠI GIA ĐÌNH THANH THANH THANH THANH THANH THANH THANH THANH"
+];
