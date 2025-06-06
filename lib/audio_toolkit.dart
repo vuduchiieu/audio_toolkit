@@ -41,22 +41,11 @@ class NativeMethodResult {
 class AudioToolkit {
   static final AudioToolkit _instance = AudioToolkit._internal();
 
-  /// Truy cập singleton instance của [AudioToolkit].
   static AudioToolkit get instance => _instance;
 
   factory AudioToolkit() => _instance;
 
   AudioToolkit._internal();
-
-  /// Khởi tạo plugin, thiết lập listener và bắt đầu các dịch vụ ghi âm hệ thống.
-  Future<void> init() async {
-    if (Platform.isMacOS) {
-      // Có thể thêm xử lý đặc thù macOS tại đây.
-    }
-    _channel.setMethodCallHandler(_handleNativeCalls);
-    await initRecording();
-    await turnOnSystemRecording();
-  }
 
   final StreamController<String> _sentenceDetectedController =
       StreamController.broadcast();
@@ -64,80 +53,94 @@ class AudioToolkit {
   final StreamController<double> _dbAudiodController =
       StreamController.broadcast();
 
-  /// Stream phát ra các câu đã được nhận dạng (đoạn văn bản).
+  final StreamController<String> _micTextController =
+      StreamController.broadcast();
+
+  final StreamController<double> _micDbController =
+      StreamController.broadcast();
+
   Stream<String> get onSentenceDetected => _sentenceDetectedController.stream;
 
-  /// Stream phát ra giá trị mức âm thanh (dB) realtime.
   Stream<double> get onDbAudio => _dbAudiodController.stream;
 
-  /// Gọi phương thức native với tên [methodName] và truyền [arguments].
-  ///
-  /// Trả về [NativeMethodResult] chứa kết quả gọi native.
+  Stream<String> get onMicText => _micTextController.stream;
+
+  Stream<double> get onMicDb => _micDbController.stream;
+
+  Future<void> init() async {
+    if (Platform.isMacOS) {
+      _channel.setMethodCallHandler(_handleNativeCalls);
+      await initRecording();
+      await turnOnSystemRecording();
+    }
+  }
+
   Future<NativeMethodResult> _invokeNativeMethod(String methodName,
       {Map? arguments}) async {
     final nativeResponse = await _channel.invokeMethod(methodName, arguments);
     return NativeMethodResult.fromJson(nativeResponse);
   }
 
-  /// Khởi tạo dịch vụ ghi âm.
   Future<NativeMethodResult> initRecording() =>
       _invokeNativeMethod('initRecording');
 
-  /// Bắt đầu ghi âm.
   Future<NativeMethodResult> startRecord() =>
       _invokeNativeMethod('startRecording');
 
-  /// Dừng ghi âm.
   Future<NativeMethodResult> stopRecording() =>
       _invokeNativeMethod('stopRecording');
 
-  /// Bật ghi âm hệ thống (system audio).
   Future<NativeMethodResult> turnOnSystemRecording() =>
       _invokeNativeMethod('turnOnSystemRecording');
 
-  /// Tắt ghi âm hệ thống.
   Future<NativeMethodResult> turnOffSystemRecording() =>
       _invokeNativeMethod('turnOffSystemRecording');
 
-  /// Bắt đầu ghi âm micro.
   Future<NativeMethodResult> startMicRecording() =>
       _invokeNativeMethod('startMicRecording');
 
-  /// Dừng ghi âm micro.
   Future<NativeMethodResult> stopMicRecording() =>
       _invokeNativeMethod('stopMicRecording');
 
-  /// Khởi tạo dịch vụ chuyển giọng nói thành văn bản.
-  ///
-  /// **Lưu ý:** Chỉ hoạt động khi build app, không hoạt động khi debug vì lý do quyền nhận diện giọng nói.
   Future<NativeMethodResult> initTranscribeAudio() =>
       _invokeNativeMethod('initTranscribeAudio');
 
-  /// Chuyển file âm thanh tại [path] thành văn bản với ngôn ngữ [language].
   Future<NativeMethodResult> transcribeAudio(
           String path, LanguageType language) =>
       _invokeNativeMethod('transcribeAudio',
           arguments: {"path": path, "language": language.value});
 
-  /// Xử lý các cuộc gọi từ native.
   Future<void> _handleNativeCalls(MethodCall call) async {
     switch (call.method) {
       case 'onSentenceDetected':
         final String path = call.arguments['path'];
         _sentenceDetectedController.add(path);
         break;
-      case 'db':
-        final doubleValue = double.tryParse(call.arguments.toString());
-        if (doubleValue != null) {
-          _dbAudiodController.add(doubleValue);
+
+      case 'onMicText':
+        final String text = call.arguments['text'];
+        _micTextController.add(text);
+        break;
+
+      case 'dbMic':
+        final double? value = double.tryParse(call.arguments.toString());
+        if (value != null) {
+          _micDbController.add(value);
         }
         break;
+
+      case 'db':
+        final double? value = double.tryParse(call.arguments.toString());
+        if (value != null) {
+          _dbAudiodController.add(value);
+        }
+        break;
+
       default:
         print('⚠️ Method ${call.method} chưa được handle');
     }
   }
 
-  /// Lấy phiên bản nền tảng hiện tại.
   Future<String?> getPlatformVersion() {
     return AudioToolkitPlatform.instance.getPlatformVersion();
   }

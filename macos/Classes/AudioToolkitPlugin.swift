@@ -76,12 +76,32 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
       case "turnOnMicRecording":
         if self.isMicRecording {
           result(["result": "true", "status": true])
-          self.isMicRecording = true
           return
+        }
+        Task {
+          systemRecorder.turnOnMicRecording { resultCallback in
+            switch resultCallback {
+            case .success:
+              self.isMicRecording = true
+              result(["result": "true", "status": true])
+            case .failure(let error):
+              result(["result": "false", "errorMessage": error.localizedDescription])
+            }
+          }
         }
         break
       case "turnOffMicRecording":
-
+        Task {
+          systemRecorder.turnOffMicRecording { resultCallback in
+            switch resultCallback {
+            case .success:
+              self.isMicRecording = false
+              result(["result": "true", "status": false])
+            case .failure(let error):
+              result(["result": "false", "errorMessage": error.localizedDescription])
+            }
+          }
+        }
         break
       case "turnOnSystemRecording":
         if self.isSystemRecording {
@@ -189,6 +209,11 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   var startTime: Date?
   var speakingFrameCount: Int = 0
   var isRecording = false
+
+  var audioEngine: AVAudioEngine?
+  var speechRecognizer: SFSpeechRecognizer?
+  var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+  var recognitionTask: SFSpeechRecognitionTask?
 
   func initRecording(completion: @escaping (Result<Void, Error>) -> Void) {
 
@@ -463,6 +488,85 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       code: code,
       userInfo: [NSLocalizedDescriptionKey: message]
     )
+  }
+
+  func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+    SFSpeechRecognizer.requestAuthorization { authStatus in
+      if authStatus != .authorized {
+        completion(
+          .failure(
+            NSError(
+              domain: "Mic", code: 403,
+              userInfo: [NSLocalizedDescriptionKey: "Không có quyền truy cập nhận diện giọng nói"]
+            )
+          )
+        )
+        return
+      }
+
+      self.audioEngine = AVAudioEngine()
+      self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+      self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN"))
+
+      guard let inputNode = self.audioEngine?.inputNode,
+        let recognitionRequest = self.recognitionRequest,
+        let recognizer = self.speechRecognizer
+      else {
+        completion(
+          .failure(
+            NSError(
+              domain: "Mic", code: 500,
+              userInfo: [NSLocalizedDescriptionKey: "Không khởi tạo được audio engine"]
+            )
+          )
+        )
+        return
+      }
+
+      recognitionRequest.shouldReportPartialResults = true
+
+      self.recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { result, error in
+        if let result = result {
+          let text = result.bestTranscription.formattedString
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onMicText", arguments: ["text": text])
+          }
+        }
+
+        if error != nil {
+          self.turnOffMicRecording { _ in }
+        }
+      }
+
+      let recordingFormat = inputNode.outputFormat(forBus: 0)
+      inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
+        self.recognitionRequest?.append(buffer)
+        let db = self.calculateDB(from: buffer)
+        DispatchQueue.main.async {
+          self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
+        }
+      }
+
+      do {
+        try self.audioEngine?.start()
+        completion(.success(()))
+      } catch {
+        completion(.failure(error))
+      }
+    }
+  }
+
+  func turnOffMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+    audioEngine?.stop()
+    audioEngine?.inputNode.removeTap(onBus: 0)
+    recognitionRequest?.endAudio()
+    recognitionTask?.cancel()
+
+    audioEngine = nil
+    recognitionRequest = nil
+    recognitionTask = nil
+
+    completion(.success(()))
   }
 
 }
