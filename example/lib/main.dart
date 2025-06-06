@@ -196,7 +196,11 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
             isSystemRecord: true));
 
   Future<void> init() async {
-    await audioToolkit.init();
+    await Future.wait([
+      audioToolkit.init(),
+      audioToolkit.turnOnSystemRecording(),
+      audioToolkit.turnOnMicRecording(),
+    ]);
     _dbSub = audioToolkit.onDbAudio.listen((db) {
       final current = state;
       if (current is AudioToolkitInitial) {

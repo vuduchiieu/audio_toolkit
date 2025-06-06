@@ -71,7 +71,6 @@ class AudioToolkit {
     if (Platform.isMacOS) {
       _channel.setMethodCallHandler(_handleNativeCalls);
       await initRecording();
-      await turnOnSystemRecording();
     }
   }
 
