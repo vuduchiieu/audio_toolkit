@@ -96,11 +96,11 @@ class AudioToolkit {
   Future<NativeMethodResult> turnOffSystemRecording() =>
       _invokeNativeMethod('turnOffSystemRecording');
 
-  Future<NativeMethodResult> startMicRecording() =>
-      _invokeNativeMethod('startMicRecording');
+  Future<NativeMethodResult> turnOnMicRecording() =>
+      _invokeNativeMethod('turnOnMicRecording');
 
-  Future<NativeMethodResult> stopMicRecording() =>
-      _invokeNativeMethod('stopMicRecording');
+  Future<NativeMethodResult> turnOffMicRecording() =>
+      _invokeNativeMethod('turnOffMicRecording');
 
   Future<NativeMethodResult> initTranscribeAudio() =>
       _invokeNativeMethod('initTranscribeAudio');
@@ -112,7 +112,7 @@ class AudioToolkit {
 
   Future<void> _handleNativeCalls(MethodCall call) async {
     switch (call.method) {
-      case 'onSentenceDetected':
+      case 'onSystemAudioFile':
         final String path = call.arguments['path'];
         _sentenceDetectedController.add(path);
         break;

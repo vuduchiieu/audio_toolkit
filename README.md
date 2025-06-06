@@ -1,6 +1,5 @@
 
 # 🎧 AUDIO TOOLKIT
-Flutter Plugin for Screen Capture & Audio Recording with Transcription
 
 > 📦 A Flutter plugin for **macOS 13+** to record **system audio**, **microphone**, and **transcribe voice to text** using built-in speech recognition.
 

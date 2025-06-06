@@ -395,7 +395,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
               }
 
               DispatchQueue.main.async {
-                self.channel?.invokeMethod("onSentenceDetected", arguments: ["path": url.path])
+                self.channel?.invokeMethod("onSystemAudioFile", arguments: ["path": url.path])
               }
               isSpeaking = false
             }
@@ -495,10 +495,9 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       if authStatus != .authorized {
         completion(
           .failure(
-            NSError(
-              domain: "Mic", code: 403,
-              userInfo: [NSLocalizedDescriptionKey: "Không có quyền truy cập nhận diện giọng nói"]
-            )
+            self.makeTranscribeError(
+              code: 403, message: "Không có quyền truy cập nhận diện giọng nói")
+
           )
         )
         return
@@ -514,10 +513,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       else {
         completion(
           .failure(
-            NSError(
-              domain: "Mic", code: 500,
-              userInfo: [NSLocalizedDescriptionKey: "Không khởi tạo được audio engine"]
-            )
+            self.makeTranscribeError(
+              code: 500, message: "Không khởi tạo được audio engine")
           )
         )
         return
