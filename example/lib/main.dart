@@ -45,8 +45,6 @@ class _AudioToolkitScreenState extends State<AudioToolkitScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ScrollController prevTextController = ScrollController();
-    ScrollController textController = ScrollController();
     return Scaffold(
       backgroundColor: Colors.white,
       body: BlocProvider(
@@ -55,36 +53,12 @@ class _AudioToolkitScreenState extends State<AudioToolkitScreen> {
           listenWhen: (previous, current) {
             if (previous is AudioToolkitInitial &&
                 current is AudioToolkitInitial) {
-              return previous.path != current.path ||
-                  previous.prevText != current.prevText ||
-                  previous.text != current.text;
+              return previous.path != current.path;
             }
             return true;
           },
           listener: (context, state) {
             if (state is AudioToolkitInitial) {
-              if (state.prevText.isNotEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  prevTextController.animateTo(
-                    0,
-                    duration: Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                });
-
-                return;
-              }
-              if (state.text.isNotEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  textController.animateTo(
-                    0,
-                    duration: Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                });
-
-                return;
-              }
               if (state.path.isNotEmpty) {
                 // context
                 //     .read<AudioToolkitCubit>()
@@ -179,12 +153,11 @@ class _AudioToolkitScreenState extends State<AudioToolkitScreen> {
                       Expanded(
                           child: Row(
                         children: [
-                          _buildTranscriptionBox(
-                              state.prevText, prevTextController),
+                          _buildTranscriptionBox(state.prevText),
                           SizedBox(
                             width: 10,
                           ),
-                          _buildTranscriptionBox(state.text, textController)
+                          _buildTranscriptionBox(state.text)
                         ],
                       )),
                   ],
@@ -231,8 +204,7 @@ class _AudioToolkitScreenState extends State<AudioToolkitScreen> {
     );
   }
 
-  Widget _buildTranscriptionBox(
-      List<String> text, ScrollController scrollController) {
+  Widget _buildTranscriptionBox(List<String> text) {
     return Expanded(
       child: Container(
         margin: EdgeInsets.symmetric(vertical: 10),
@@ -241,14 +213,20 @@ class _AudioToolkitScreenState extends State<AudioToolkitScreen> {
           color: Colors.pinkAccent.shade100,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: ListView.builder(
-          itemCount: text.length,
-          controller: scrollController,
-          shrinkWrap: false,
-          itemBuilder: (_, index) => Text(
-            text[index],
-            style: const TextStyle(color: Colors.white),
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ListView.builder(
+                itemCount: text.length,
+                shrinkWrap: false,
+                itemBuilder: (_, index) => Text(
+                  text[index],
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -369,7 +347,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
   }
 
   Future<void> turnOnMicRecording() async {
-    final res = await audioToolkit.turnOnMicRecording();
+    final res = await audioToolkit.turnOnMicRecording(LanguageType.en);
     if (res.result) {
       _dbMicSub = audioToolkit.onMicDb.listen(
         (db) {
@@ -402,6 +380,8 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
     }
 
     final res = await audioToolkit.startRecord(inputLanguage);
+
+    print('res: ${res.result}');
     if (res.result) {
       final current = state;
       if (current is AudioToolkitInitial) {
@@ -425,6 +405,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
       _sentenceMicSub = audioToolkit.onMicAudio.listen((text) async {
         final current0 = state;
         if (current0 is AudioToolkitInitial) {
+          print('text: $text');
           emit(current0.copyWith(prevText: [text]));
 
           final translated =
@@ -493,8 +474,6 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
     }
   }
 
-  List<String> _translatedBatch = [];
-
   Future<void> transcribeAudioWhisper(
       String path, LanguageType language) async {
     if (_isProcessing || _fileQueue.isEmpty) return;
@@ -530,39 +509,27 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
           if (translated != null) {
             final current = state;
             if (current is AudioToolkitInitial) {
-              final timestamp = '[${DateFormat.Hms().format(DateTime.now())}]';
-              final formatted = '$timestamp $translated';
+              // List<String> updatedText = [...latest.text, translated];
+              // emit(latest.copyWith(text: updatedText));
 
-              _translatedBatch.add(translated);
+              // final translated2 = await repo.translateWithOpenAI(
+              //     updatedText.join(), LanguageType.vi);
 
-              final newText = [formatted, ...current.text];
-              emit(current.copyWith(text: newText));
-
-              if (_translatedBatch.length == 3) {
-                final combined = _translatedBatch.join(' ');
-                final polished =
-                    await repo.translateWithOpenAI(combined, LanguageType.vi);
-
-                if (polished != null) {
-                  final current2 = state;
-                  if (current2 is AudioToolkitInitial) {
-                    final updated = [
-                      '$timestamp $polished',
-                      ...current2.text.skip(3),
-                    ];
-
-                    emit(current2.copyWith(text: updated));
-                  }
-                }
-
-                _translatedBatch.clear();
-              }
+              emit(
+                current.copyWith(
+                  text: [
+                    '[${DateFormat.Hms().format(DateTime.now())}] $translated',
+                    ...current.text
+                  ],
+                ),
+              );
             }
           }
         } else {
           print("🚫 Bỏ qua câu bị chặn: $cleaned");
         }
       }
+    } catch (e) {
     } finally {
       _isProcessing = false;
       try {
