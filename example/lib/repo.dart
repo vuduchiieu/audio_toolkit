@@ -31,22 +31,29 @@ class AudioToolkitRepo {
     final url = 'https://api.openai.com/v1/chat/completions';
 
     final res = await ApiClient.fetch(url, token: apikey, data: {
-      "model": "gpt-3.5-turbo",
+      "model": "gpt-4o",
       "messages": [
         {
           "role": "system",
           "content":
-              "You are a translator. Translate all input to ${language.value} without explanation."
+              " Translate the text sent by the user into $language following these rules:"
+                  "\n1. Do not translate proper nouns."
+                  "\n2. Preserve whitespace."
+                  "\n3. Ensure the use of the most accurate words."
+                  "\n4. Return only the translated text, nothing else."
+                  "\n5. Keep emojis and emoticons unchanged."
+                  "\n6. Do not return the text before translation."
+                  "\n7. If the input language and the language to be translated are the same, return the original text."
         },
         {"role": "user", "content": inputText}
       ],
-      "temperature": 0.3
+      "temperature": 0.7
     });
 
     if (!res.hasError) {
       return res.data["choices"][0]["message"]["content"].toString().trim();
     } else {
-      return '🚫 translateWithOpenAI Lỗi rồi ';
+      return '🚫 translateWithOpenAI Lỗi rồi ${res.errorMessage}';
     }
   }
 }
