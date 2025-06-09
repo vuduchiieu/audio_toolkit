@@ -198,7 +198,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   private var startTime: Date?
 
   private let sampleRate: Double = 48000
-  private let silenceThresholdDB: Float = -35
   private let minSpeakingDuration = 0.6
   private let maxSilenceDuration = 0.5
 
