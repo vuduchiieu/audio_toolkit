@@ -46,7 +46,7 @@ class AudioToolkitRepo {
     if (!res.hasError) {
       return res.data["choices"][0]["message"]["content"].toString().trim();
     } else {
-      return '🚫 translateWithOpenAI Lỗi rồi ';
+      return '🚫 translateWithOpenAI Lỗi rồi ${res.errorMessage}';
     }
   }
 }

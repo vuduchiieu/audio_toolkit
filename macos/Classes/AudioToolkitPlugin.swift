@@ -40,13 +40,21 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
     switch call.method {
     case "initRecording":
       systemRecorder.initRecording { resultCallback in
-        self.wrapResult(resultCallback, result: result)
+        switch resultCallback {
+        case .success(): result(["result": "true"])
+        case .failure(let error):
+          result(["result": "false", "errorMessage": error.localizedDescription])
+        }
       }
 
     case "startRecording":
       let language = (call.arguments as? [String: Any])?["language"] as? String ?? "vi-VN"
       systemRecorder.startRecording(language: language) { resultCallback in
-        self.wrapResult(resultCallback, result: result)
+        switch resultCallback {
+        case .success(): result(["result": "true"])
+        case .failure(let error):
+          result(["result": "false", "errorMessage": error.localizedDescription])
+        }
       }
 
     case "stopRecording":
@@ -71,7 +79,13 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
     case "turnOffMicRecording":
       systemRecorder.turnOffMicRecording { resultCallback in
         if case .success = resultCallback { self.isMicRecording = false }
-        self.wrapResult(resultCallback, result: result, key: "status", inverse: true)
+        switch resultCallback {
+        case .success:
+          self.isMicRecording = false
+          result(["result": "true", "status": false])
+        case .failure(let error):
+          result(["result": "false", "errorMessage": error.localizedDescription])
+        }
       }
 
     case "turnOnSystemRecording":
@@ -79,17 +93,63 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
         result(["result": "true", "status": true])
         return
       }
-      systemRecorder.turnOnSystemRecording { resultCallback in
-        if case .success = resultCallback { self.isSystemRecording = true }
-        self.wrapResult(resultCallback, result: result, key: "status")
+      Task {
+        systemRecorder.turnOnSystemRecording { resultCallback in
+          switch resultCallback {
+          case .success:
+            result(["result": "true", "status": !self.isSystemRecording])
+            self.isSystemRecording = true
+          case .failure(let error):
+            result(["result": "false", "errorMessage": error.localizedDescription])
+          }
+        }
       }
-
     case "turnOffSystemRecording":
       Task {
         await systemRecorder.turnOffSystemRecording { resultCallback in
-          if case .success = resultCallback { self.isSystemRecording = false }
-          self.wrapResult(resultCallback, result: result, key: "status", inverse: true)
+          switch resultCallback {
+          case .success:
+            result(["result": "true", "status": !self.isSystemRecording])
+            self.isSystemRecording = false
+          case .failure(let error):
+            result(["result": "false", "errorMessage": error.localizedDescription])
+          }
         }
+      }
+
+    case "initTranscribeAudio":
+      systemRecorder.initTranscribeAudio { resultCallback in
+        switch resultCallback {
+        case .success:
+          result(["result": "true"])
+        case .failure(let error):
+          result(["result": "false", "errorMessage": error.localizedDescription])
+        }
+      }
+
+    case "transcribeAudio":
+      if let args = call.arguments as? [String: Any],
+        let path = args["path"] as? String
+      {
+
+        let language = args["language"] as? String ?? "vi-VN"
+        let url = URL(fileURLWithPath: path)
+
+        Task {
+          systemRecorder.transcribeAudio(url: url, language: language) { resultCallback in
+            switch resultCallback {
+            case .success(let text):
+              result(["result": "true", "text": text, "path": path])
+            case .failure(let error):
+              result([
+                "result": "false", "errorMessage": error.localizedDescription, "path": path,
+              ])
+            }
+          }
+        }
+
+      } else {
+        result(["result": "false", "errorMessage": "Thiếu đường dẫn file"])
       }
 
     default:
@@ -97,17 +157,6 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func wrapResult(
-    _ resultCallback: Result<Void, Error>, result: @escaping FlutterResult, key: String = "result",
-    inverse: Bool = false
-  ) {
-    switch resultCallback {
-    case .success:
-      result(["result": "true", key: inverse ? false : true])
-    case .failure(let error):
-      result(["result": "false", "errorMessage": error.localizedDescription])
-    }
-  }
 }
 
 @available(macOS 13.0, *)
@@ -120,10 +169,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
   }
   enum AudioFormat: String { case aac, alac, flac, opus }
 
-  // MARK: - Public properties
   var channel: FlutterMethodChannel?
 
-  // MARK: - Internal states
   private var stream: SCStream?
   private var audioFile: AVAudioFile?
   private var fullAudioFile: AVAudioFile?
@@ -149,12 +196,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   private var filter: SCContentFilter?
 
-  // MARK: - Initialization
   init(channel: FlutterMethodChannel?) {
     self.channel = channel
   }
 
-  // MARK: - System Audio Setup
   func initRecording(completion: @escaping (Result<Void, Error>) -> Void) {
     SCShareableContent.getExcludingDesktopWindows(true, onScreenWindowsOnly: true) {
       [weak self] content, error in
@@ -169,15 +214,13 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
 
-  func turnOnSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+  func turnOnSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
     guard let filter = self.filter else {
       return completion(.failure(makeError(404, "Chưa initRecording")))
     }
     prepareAudioSettings()
-    Task {
-      await startSCStream(filter: filter)
-      completion(.success(()))
-    }
+    await startSCStream(filter: filter)
+    completion(.success(()))
   }
 
   func turnOffSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
@@ -190,7 +233,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
 
-  // MARK: - Mic Recording
   func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
     audioEngine = AVAudioEngine()
     guard let inputNode = audioEngine?.inputNode else {
@@ -281,7 +323,9 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       print("❌ Lỗi khi start SCStream: \(error)")
     }
   }
-  // MARK: - Stream Callback
+  private var dbHistory: [Float] = []
+  private var dbSmoothingWindow = 20
+
   private func stream(
     _ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
     of outputType: SCStreamOutputType
@@ -289,14 +333,25 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     guard outputType == .audio, let pcmBuffer = sampleBuffer.toPCMBuffer() else { return }
 
     let db = calculateDB(from: pcmBuffer)
+
+    // Cập nhật dbHistory
+    dbHistory.append(db)
+    if dbHistory.count > dbSmoothingWindow {
+      dbHistory.removeFirst()
+    }
+
+    // Tính ngưỡng động
+    let averageDB = dbHistory.reduce(0, +) / Float(dbHistory.count)
+    let adaptiveThreshold = averageDB - 5  // Giảm 5dB so với trung bình gần nhất
+
     DispatchQueue.main.async {
       self.channel?.invokeMethod("db", arguments: String(db))
     }
 
-    try? fullAudioFile?.write(from: pcmBuffer)
+    // try? fullAudioFile?.write(from: pcmBuffer)
     guard isRecording else { return }
 
-    if db > silenceThresholdDB {
+    if db > adaptiveThreshold {
       if !isSpeaking {
         isSpeaking = true
         startTime = Date()
@@ -330,7 +385,65 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
 
-  // MARK: - Helpers
+  func initTranscribeAudio(completion: @escaping (Result<String, Error>) -> Void) {
+    SFSpeechRecognizer.requestAuthorization { authStatus in
+      DispatchQueue.main.async { [self] in
+        switch authStatus {
+        case .denied:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 401, message: "Người dùng từ chối quyền sử dụng Speech Recognition")))
+          return
+        case .restricted:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 402, message: "Thiết bị không hỗ trợ Speech Recognition")))
+          return
+        case .notDetermined:
+          completion(
+            .failure(
+              self.makeTranscribeError(
+                code: 403, message: "Quyền Speech Recognition chưa được yêu cầu"))
+          )
+          return
+        case .authorized:
+          completion(.success("authorized"))
+        @unknown default:
+          completion(
+            .failure(
+              self.makeTranscribeError(code: 406, message: "Trạng thái xác thực không xác định")))
+        }
+      }
+    }
+  }
+
+  func transcribeAudio(
+    url: URL,
+    language: String = "vi-VN",
+    completion: @escaping (Result<String, Error>) -> Void
+  ) {
+
+    let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
+    guard let recognizer = recognizer, recognizer.isAvailable else {
+      completion(
+        .failure(
+          self.makeTranscribeError(code: 404, message: "Speech Recognizer không khả dụng")))
+      return
+    }
+    let request = SFSpeechURLRecognitionRequest(url: url)
+    recognizer.recognitionTask(with: request) { result, error in
+      if let result = result, result.isFinal {
+        completion(.success(result.bestTranscription.formattedString))
+      } else if let error = error {
+        completion(
+          .failure(
+            self.makeTranscribeError(
+              code: 405, message: "❌ Lỗi nhận diện: \(error.localizedDescription)")))
+      }
+    }
+  }
   private func setupSpeechRecognition(language: String) throws {
     speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
     guard let recognizer = speechRecognizer, recognizer.isAvailable else {

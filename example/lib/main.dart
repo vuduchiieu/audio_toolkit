@@ -400,35 +400,27 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
         },
       );
 
-      _sentenceMicSub = audioToolkit.onMicAudio.listen(
-        (text) async {
-          final current0 = state;
-          if (current0 is AudioToolkitInitial) {
-            emit(current0.copyWith(prevText: [text]));
-            Future.delayed(
-              Duration(seconds: 2),
-              () async {
-                String? newText = text;
-                final translated =
-                    await repo.translateWithOpenAI(newText, outputLanguage);
-                if (translated != null) {
-                  final current = state;
-                  if (current is AudioToolkitInitial) {
-                    emit(
-                      current.copyWith(
-                        text: [
-                          '[${DateFormat.Hms().format(DateTime.now())}] $translated',
-                        ],
-                      ),
-                    );
-                    newText = null;
-                  }
-                }
-              },
-            );
+      _sentenceMicSub = audioToolkit.onMicAudio.listen((text) async {
+        final current0 = state;
+        if (current0 is AudioToolkitInitial) {
+          emit(current0.copyWith(prevText: [text]));
+
+          final translated =
+              await repo.translateWithOpenAI(text, outputLanguage);
+          if (translated != null) {
+            final current = state;
+            if (current is AudioToolkitInitial) {
+              emit(
+                current.copyWith(
+                  text: [
+                    '[${DateFormat.Hms().format(DateTime.now())}] $translated',
+                  ],
+                ),
+              );
+            }
           }
-        },
-      );
+        }
+      });
     }
   }
 

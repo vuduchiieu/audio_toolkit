@@ -79,7 +79,7 @@ class AudioToolkit {
       _channel.setMethodCallHandler(_handleNativeCalls);
       await initRecording();
       await turnOnSystemRecording();
-      await turnOnMicRecording(LanguageType.en);
+      await turnOnMicRecording(LanguageType.vi);
     }
   }
 
