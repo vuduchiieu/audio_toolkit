@@ -16,7 +16,7 @@ dependencies:
   #   git:
   #     url: https://github.com/vuduchiieu/audio_toolkit.git
   #     ref: main
-  audio_toolkit: ^0.0.14
+  audio_toolkit: ^0.0.15
   cupertino_icons: ^1.0.8
   flutter_bloc: ^9.1.1
   equatable: ^2.0.7

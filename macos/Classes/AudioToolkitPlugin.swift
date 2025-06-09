@@ -282,7 +282,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
   // MARK: - Stream Callback
-  func stream(
+  private func stream(
     _ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
     of outputType: SCStreamOutputType
   ) {
