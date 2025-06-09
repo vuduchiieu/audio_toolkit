@@ -53,7 +53,7 @@ class AudioToolkit {
   final StreamController<double> _dbAudiodController =
       StreamController.broadcast();
 
-  final StreamController<String> _onMicAudioFileController =
+  final StreamController<String> _onMicAudioTextController =
       StreamController.broadcast();
 
   final StreamController<double> _micDbController =
@@ -66,7 +66,7 @@ class AudioToolkit {
   Stream<double> get onDbAudio => _dbAudiodController.stream;
 
   /// Stream phát ra văn bản được nhận dạng từ mic.
-  Stream<String> get onMicAudio => _onMicAudioFileController.stream;
+  Stream<String> get onMicAudio => _onMicAudioTextController.stream;
 
   /// Stream đo mức âm lượng (dB) từ mic.
   Stream<double> get onMicDb => _micDbController.stream;
@@ -78,6 +78,8 @@ class AudioToolkit {
     if (Platform.isMacOS) {
       _channel.setMethodCallHandler(_handleNativeCalls);
       await initRecording();
+      await turnOnSystemRecording();
+      await turnOnMicRecording(LanguageType.vi);
     }
   }
 
@@ -93,8 +95,9 @@ class AudioToolkit {
       _invokeNativeMethod('initRecording');
 
   /// Bắt đầu ghi âm hệ thống.
-  Future<NativeMethodResult> startRecord() =>
-      _invokeNativeMethod('startRecording');
+  Future<NativeMethodResult> startRecord(LanguageType language) =>
+      _invokeNativeMethod('startRecording',
+          arguments: {'language': language.value});
 
   /// Dừng ghi âm và trả về file hệ thống.
   Future<NativeMethodResult> stopRecording() =>
@@ -109,8 +112,9 @@ class AudioToolkit {
       _invokeNativeMethod('turnOffSystemRecording');
 
   /// Bật ghi âm từ microphone.
-  Future<NativeMethodResult> turnOnMicRecording() =>
-      _invokeNativeMethod('turnOnMicRecording');
+  Future<NativeMethodResult> turnOnMicRecording(LanguageType language) =>
+      _invokeNativeMethod('turnOnMicRecording',
+          arguments: {"language": language.value});
 
   /// Tắt ghi âm từ microphone.
   Future<NativeMethodResult> turnOffMicRecording() =>
@@ -133,14 +137,13 @@ class AudioToolkit {
         final String path = call.arguments['path'];
         _onSystemAudioFileController.add(path);
         break;
-
-      case 'onMicAudioFile':
-        final String path = call.arguments['path'];
-        _onMicAudioFileController.add(path);
+      case 'onMicText':
+        _onMicAudioTextController.add(call.arguments['text']);
         break;
 
       case 'dbMic':
-        final double? value = double.tryParse(call.arguments.toString());
+        double? value = double.tryParse(call.arguments.toString());
+        // print('value: $value');
         if (value != null) {
           _micDbController.add(value);
         }
@@ -166,7 +169,6 @@ class AudioToolkit {
   Future<void> dispose() async {
     _onSystemAudioFileController.close();
     _dbAudiodController.close();
-    _onMicAudioFileController.close();
     _micDbController.close();
 
     await Future.wait(
