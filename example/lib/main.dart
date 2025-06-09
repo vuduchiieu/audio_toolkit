@@ -369,7 +369,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
   }
 
   Future<void> turnOnMicRecording() async {
-    final res = await audioToolkit.turnOnMicRecording(LanguageType.en);
+    final res = await audioToolkit.turnOnMicRecording();
     if (res.result) {
       _dbMicSub = audioToolkit.onMicDb.listen(
         (db) {
