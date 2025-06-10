@@ -360,20 +360,12 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
     }
   }
 
+  Timer? _debounce;
+  StringBuffer _currentSentenceBuffer = StringBuffer();
+
   Future<void> startRecord(
       {required LanguageType inputLanguage,
       required LanguageType outputLanguage}) async {
-    final current0 = state;
-    if (current0 is AudioToolkitInitial) {
-      emit(
-        current0.copyWith(
-          text: [
-            '[${DateFormat.Hms().format(DateTime.now())}] Ấn start record',
-            ...current0.text
-          ],
-        ),
-      );
-    }
     final current = state;
     if (current is AudioToolkitInitial) {
       emit(current.copyWith(isRecording: true));
@@ -381,7 +373,6 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
 
     final res = await audioToolkit.startRecord(inputLanguage);
 
-    print('res: ${res.result}');
     if (res.result) {
       final current = state;
       if (current is AudioToolkitInitial) {
@@ -405,23 +396,31 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
       _sentenceMicSub = audioToolkit.onMicAudio.listen((text) async {
         final current0 = state;
         if (current0 is AudioToolkitInitial) {
-          print('text: $text');
           emit(current0.copyWith(prevText: [text]));
 
-          final translated =
-              await repo.translateWithOpenAI(text, outputLanguage);
-          if (translated != null) {
-            final current = state;
-            if (current is AudioToolkitInitial) {
-              emit(
-                current.copyWith(
-                  text: [
-                    '[${DateFormat.Hms().format(DateTime.now())}] $translated',
-                  ],
-                ),
-              );
+          _currentSentenceBuffer.clear();
+          _currentSentenceBuffer.write("$text ");
+          _debounce?.cancel();
+
+          _debounce = Timer(Duration(milliseconds: 500), () async {
+            final fullSentence = _currentSentenceBuffer.toString();
+            _currentSentenceBuffer.clear();
+
+            if (fullSentence.isNotEmpty) {
+              final translated =
+                  await repo.translateWithOpenAI(fullSentence, outputLanguage);
+              if (translated != null) {
+                final current = state;
+                if (current is AudioToolkitInitial) {
+                  emit(current.copyWith(
+                    text: [
+                      '[${DateFormat.Hms().format(DateTime.now())}] $translated',
+                    ],
+                  ));
+                }
+              }
             }
-          }
+          });
         }
       });
     }

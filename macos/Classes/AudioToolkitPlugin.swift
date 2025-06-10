@@ -232,6 +232,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   func turnOffSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
     do {
+      fullAudioFile = try prepareAudioFile(suffix: "_full")
       try await stream?.stopCapture()
       stream = nil
       completion(.success(()))
@@ -293,6 +294,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     isSpeaking = false
     silenceFrameCount = 0
     speakingFrameCount = 0
+    recognitionRequest?.endAudio()
+    recognitionTask?.finish()
     recognitionTask?.cancel()
 
     let path = fullAudioFile?.url.path
@@ -308,8 +311,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   func startSCStream(filter: SCContentFilter) async {
     let config = SCStreamConfiguration()
-    config.width = 2
-    config.height = 2
+
     config.showsCursor = false
     config.capturesAudio = true
     config.sampleRate = audioSettings[AVSampleRateKey] as! Int
@@ -355,7 +357,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       self.channel?.invokeMethod("db", arguments: String(db))
     }
 
-    // try? fullAudioFile?.write(from: pcmBuffer)
+    try? fullAudioFile?.write(from: pcmBuffer)
+
     guard isRecording else { return }
 
     if db > adaptiveThreshold {

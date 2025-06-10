@@ -40,6 +40,8 @@ extension LanguageTypeExt on LanguageType {
     }
   }
 
+  String get shortCode => value.split('-').first;
+
   String get displayName {
     switch (this) {
       case LanguageType.vi:

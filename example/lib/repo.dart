@@ -36,18 +36,16 @@ class AudioToolkitRepo {
         {
           "role": "system",
           "content":
-              " Translate the text sent by the user into $language following these rules:"
-                  "\n1. Do not translate proper nouns."
-                  "\n2. Preserve whitespace."
-                  "\n3. Ensure the use of the most accurate words."
-                  "\n4. Return only the translated text, nothing else."
-                  "\n5. Keep emojis and emoticons unchanged."
-                  "\n6. Do not return the text before translation."
-                  "\n7. If the input language and the language to be translated are the same, return the original text."
+              """You are a translator. Translate the user's input into ${language.shortCode} with these rules:
+          1. Do not translate proper nouns (names, places, brands).
+          2. Preserve all whitespaces and line breaks.
+          3. Use natural and accurate words for the context.
+          4. Output only the translated text — no formatting or extra explanation.
+          5. Keep emojis and emoticons unchanged."""
         },
         {"role": "user", "content": inputText}
       ],
-      "temperature": 0.7
+      "temperature": 0.3
     });
 
     if (!res.hasError) {
