@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:audio_toolkit/audio_toolkit.dart';
 import 'package:audio_toolkit/language_type.dart';
+import 'package:audio_toolkit_example/translate_model.dart';
 import 'package:audio_toolkit_example/repo.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -361,7 +362,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
   }
 
   Timer? _debounce;
-  StringBuffer _currentSentenceBuffer = StringBuffer();
+  final _currentSentenceBuffer = StringBuffer();
 
   Future<void> startRecord(
       {required LanguageType inputLanguage,
@@ -384,6 +385,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
           if (current0 is AudioToolkitInitial) {
             emit(current0.copyWith(path: path));
             final file = File(path);
+            print('file: $file');
 
             await waitForFileStable(file);
 
@@ -407,8 +409,7 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
             _currentSentenceBuffer.clear();
 
             if (fullSentence.isNotEmpty) {
-              final translated =
-                  await repo.translateWithOpenAI(fullSentence, outputLanguage);
+              final translated = await translate(fullSentence, outputLanguage);
               if (translated != null) {
                 final current = state;
                 if (current is AudioToolkitInitial) {
@@ -504,16 +505,10 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
             (blocked) => cleaned.toLowerCase() == blocked.trim().toLowerCase());
 
         if (!isBlocked) {
-          final translated = await repo.translateWithOpenAI(cleaned, language);
+          final translated = await translate(cleaned, language);
           if (translated != null) {
             final current = state;
             if (current is AudioToolkitInitial) {
-              // List<String> updatedText = [...latest.text, translated];
-              // emit(latest.copyWith(text: updatedText));
-
-              // final translated2 = await repo.translateWithOpenAI(
-              //     updatedText.join(), LanguageType.vi);
-
               emit(
                 current.copyWith(
                   text: [
@@ -531,10 +526,22 @@ class AudioToolkitCubit extends Cubit<AudioToolkitState> {
     } catch (e) {
     } finally {
       _isProcessing = false;
-      try {
-        // await file.delete();
-      } catch (e) {}
+
       transcribeAudioWhisper(path, language);
+    }
+  }
+
+  Future<String?> translate(String inputText, LanguageType language) async {
+    try {
+      final res = await repo.translate(inputText, language);
+
+      if (!res.hasError) {
+        final decode = TranslateModel.fromJson(res.data);
+        return decode.choices.first.message.content.trim();
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 

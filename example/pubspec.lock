@@ -12,10 +12,11 @@ packages:
   audio_toolkit:
     dependency: "direct main"
     description:
-      path: ".."
-      relative: true
-    source: path
-    version: "0.0.18"
+      name: audio_toolkit
+      sha256: dbdb03cf5576a7ab99c7f62d00dddd0a795967e8d90e028ab2c188eeffe64903
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.20"
   bloc:
     dependency: transitive
     description:

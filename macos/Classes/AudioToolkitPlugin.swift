@@ -199,7 +199,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   private let sampleRate: Double = 48000
   private let minSpeakingDuration = 0.6
-  private let maxSilenceDuration = 0.5
+  private let maxSilenceDuration = 0.3
 
   private var filter: SCContentFilter?
 
@@ -343,13 +343,11 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
     let db = calculateDB(from: pcmBuffer)
 
-    // Cập nhật dbHistory
     dbHistory.append(db)
     if dbHistory.count > dbSmoothingWindow {
       dbHistory.removeFirst()
     }
 
-    // Tính ngưỡng động
     let averageDB = dbHistory.reduce(0, +) / Float(dbHistory.count)
     let adaptiveThreshold = averageDB - 5
 
@@ -455,15 +453,15 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
   private func setupSpeechRecognition(language: String) async throws {
-    let status = await withCheckedContinuation { continuation in
-      SFSpeechRecognizer.requestAuthorization { status in
-        continuation.resume(returning: status)
-      }
-    }
+    // let status = await withCheckedContinuation { continuation in
+    //   SFSpeechRecognizer.requestAuthorization { status in
+    //     continuation.resume(returning: status)
+    //   }
+    // }
 
-    guard status == .authorized else {
-      throw makeError(402, "Speech recognition bị từ chối hoặc không khả dụng")
-    }
+    // guard status == .authorized else {
+    //   throw makeError(402, "Speech recognition bị từ chối hoặc không khả dụng")
+    // }
 
     guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language)),
       recognizer.isAvailable
