@@ -45,6 +45,15 @@ enum LanguageType {
   lt,
 }
 
+extension LanguageTypeParser on String {
+  LanguageType toLanguageType() {
+    return LanguageType.values.firstWhere(
+      (lang) => lang.name == this,
+      orElse: () => LanguageType.vi,
+    );
+  }
+}
+
 extension LanguageTypeExt on LanguageType {
   String get value {
     switch (this) {
@@ -140,13 +149,6 @@ extension LanguageTypeExt on LanguageType {
   }
 
   String get shortCode => value.split('-').first;
-
-  static LanguageType fromShortCode(String code) {
-    return LanguageType.values.firstWhere(
-      (lang) => lang.shortCode == code.toLowerCase(),
-      orElse: () => LanguageType.vi,
-    );
-  }
 
   String get displayName {
     switch (this) {
