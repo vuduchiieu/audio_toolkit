@@ -1,8 +1,8 @@
 enum LanguageType {
   en,
   vi,
-  jp,
-  kr,
+  ja,
+  ko,
   zh,
   fr,
   es,
@@ -61,9 +61,9 @@ extension LanguageTypeExt on LanguageType {
         return "en-US";
       case LanguageType.vi:
         return "vi-VN";
-      case LanguageType.jp:
+      case LanguageType.ja:
         return "ja-JP";
-      case LanguageType.kr:
+      case LanguageType.ko:
         return "ko-KR";
       case LanguageType.zh:
         return "zh-CN";
@@ -156,9 +156,9 @@ extension LanguageTypeExt on LanguageType {
         return "English";
       case LanguageType.vi:
         return "Tiếng Việt";
-      case LanguageType.jp:
+      case LanguageType.ja:
         return "日本語";
-      case LanguageType.kr:
+      case LanguageType.ko:
         return "한국어";
       case LanguageType.zh:
         return "中文";

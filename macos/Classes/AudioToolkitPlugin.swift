@@ -452,6 +452,8 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       }
     }
   }
+  private var finalText = ""
+  private var debounceTimer: Timer?
   private func setupSpeechRecognition(language: String) async throws {
     // let status = await withCheckedContinuation { continuation in
     //   SFSpeechRecognizer.requestAuthorization { status in
@@ -476,9 +478,21 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     recognitionTask = recognizer.recognitionTask(with: recognitionRequest!) { result, error in
       if let result = result {
         let text = result.bestTranscription.formattedString
-        DispatchQueue.main.async {
-          self.channel?.invokeMethod("onMicText", arguments: ["text": text])
+
+        // Cập nhật finalText
+        self.finalText = text
+
+        // Huỷ timer cũ nếu có
+        self.debounceTimer?.invalidate()
+
+        // Đợi 1.5 giây, nếu không có update mới thì gửi text
+        self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { _ in
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onMicText", arguments: ["text": self.finalText])
+            self.finalText = ""  // Reset lại sau khi gửi
+          }
         }
+
       } else if let error = error {
         print("❌ Speech error: \(error.localizedDescription)")
       }
