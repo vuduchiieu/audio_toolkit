@@ -453,7 +453,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
   private var finalText = ""
-  // private var debounceTimer: Timer?
+  private var debounceTimer: Timer?
   private func setupSpeechRecognition(language: String) async throws {
     let status = await withCheckedContinuation { continuation in
       SFSpeechRecognizer.requestAuthorization { status in
@@ -478,9 +478,15 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     recognitionTask = recognizer.recognitionTask(with: recognitionRequest!) { result, error in
       if let result = result {
         let text = result.bestTranscription.formattedString
-        DispatchQueue.main.async {
-          self.channel?.invokeMethod("onMicText", arguments: ["text": text])
+        self.finalText = text
+
+        self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) {
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onMicText", arguments: ["text": self.finalText])
+            self.finalText = ""
+          }
         }
+
       } else if let error = error {
         print("❌ Speech error: \(error.localizedDescription)")
       }
