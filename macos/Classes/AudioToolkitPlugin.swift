@@ -453,7 +453,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
   }
   private var finalText = ""
-  private var debounceTimer: Timer?
+  private var lastSpokenText = ""
+  private var isSpeaking2 = false
+  private var silenceTimer: Timer?
+
   private func setupSpeechRecognition(language: String) async throws {
     let status = await withCheckedContinuation { continuation in
       SFSpeechRecognizer.requestAuthorization { status in
@@ -478,12 +481,21 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     recognitionTask = recognizer.recognitionTask(with: recognitionRequest!) { result, error in
       if let result = result {
         let text = result.bestTranscription.formattedString
+
         self.finalText = text
 
-        self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) {
-          DispatchQueue.main.async {
-            self.channel?.invokeMethod("onMicText", arguments: ["text": self.finalText])
-            self.finalText = ""
+        if self.finalText != self.lastSpokenText {
+          self.isSpeaking2 = true
+          self.lastSpokenText = self.finalText
+
+          self.silenceTimer?.invalidate()
+          self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { _ in
+            DispatchQueue.main.async {
+              self.channel?.invokeMethod("onMicText", arguments: ["text": self.lastSpokenText])
+              self.lastSpokenText = ""
+              self.finalText = ""
+              self.isSpeaking2 = false
+            }
           }
         }
 
@@ -492,7 +504,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       }
     }
   }
-
   private func cleanupSpeechRecognition() {
     recognitionRequest = nil
     recognitionTask = nil
