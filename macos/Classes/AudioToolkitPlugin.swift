@@ -213,7 +213,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       guard let self = self else { return }
       if let error = error { return completion(.failure(error)) }
       guard let display = content?.displays.first else {
-        return completion(.failure(self.makeError(404, "Không tìm thấy màn hình")))
+        return completion(
+          .failure(
+            self.makeTranscribeError(
+              code: 404, message: "Không tìm thấy màn hình")))
       }
       self.filter = SCContentFilter(
         display: display, excludingApplications: [], exceptingWindows: [])
@@ -223,9 +226,17 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   func turnOnSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
     guard let filter = self.filter else {
-      return completion(.failure(makeError(404, "Chưa initRecording")))
+      return completion(
+        .failure(
+          self.makeTranscribeError(
+            code: 404, message: "Chưa initRecording")))
     }
-    prepareAudioSettings()
+    audioSettings = [
+      AVSampleRateKey: 48000,
+      AVNumberOfChannelsKey: 2,
+      AVFormatIDKey: kAudioFormatMPEG4AAC,
+      AVEncoderBitRateKey: AudioQuality.high.rawValue * 1000,
+    ]
     await startSCStream(filter: filter)
     completion(.success(()))
   }
@@ -237,14 +248,20 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       stream = nil
       completion(.success(()))
     } catch {
-      completion(.failure(makeError(404, error.localizedDescription)))
+      completion(
+        .failure(
+          self.makeTranscribeError(
+            code: 404, message: error.localizedDescription)))
     }
   }
 
   func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
     audioEngine = AVAudioEngine()
     guard let inputNode = audioEngine?.inputNode else {
-      return completion(.failure(makeError(500, "Không khởi tạo được audio engine")))
+      return completion(
+        .failure(
+          self.makeTranscribeError(
+            code: 500, message: "Không khởi tạo được audio engine")))
     }
 
     isMicRecording = true
@@ -304,7 +321,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     cleanupSpeechRecognition()
 
     guard let finalPath = path else {
-      return completion(.failure(makeError(500, "Không tìm thấy file")))
+      return completion(
+        .failure(
+          self.makeTranscribeError(
+            code: 500, message: "Không tìm thấy file")))
     }
     completion(.success(finalPath))
   }
@@ -452,53 +472,47 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
       }
     }
   }
-  private var finalText = ""
-  private var lastSpokenText = ""
-  private var isSpeaking2 = false
-  private var silenceTimer: Timer?
+
+  var lastRecognizedText = ""
 
   private func setupSpeechRecognition(language: String) async throws {
-    let status = await withCheckedContinuation { continuation in
-      SFSpeechRecognizer.requestAuthorization { status in
-        continuation.resume(returning: status)
-      }
-    }
+    // let status = await withCheckedContinuation { continuation in
+    //   SFSpeechRecognizer.requestAuthorization { status in
+    //     continuation.resume(returning: status)
+    //   }
+    // }
 
-    guard status == .authorized else {
-      throw makeError(402, "Speech recognition bị từ chối hoặc không khả dụng")
-    }
+    // guard status == .authorized else {
+    //   self.makeTranscribeError(
+    //     code: 402, message: "Speech recognition bị từ chối hoặc không khả dụng")
+    // }
 
     guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language)),
       recognizer.isAvailable
     else {
-      throw makeError(402, "Speech recognizer không khả dụng")
+      throw self.makeTranscribeError(code: 402, message: "Speech Recognizer không khả dụng")
     }
 
     speechRecognizer = recognizer
     recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
     recognitionRequest?.shouldReportPartialResults = true
 
-    recognitionTask = recognizer.recognitionTask(with: recognitionRequest!) { result, error in
+    lastRecognizedText = ""
+
+    recognitionTask = recognizer.recognitionTask(with: recognitionRequest!) {
+      result, error in
       if let result = result {
-        let text = result.bestTranscription.formattedString
+        let fullText = result.bestTranscription.formattedString
 
-        self.finalText = text
+        let newText = String(fullText.dropFirst(self.lastRecognizedText.count))
 
-        if self.finalText != self.lastSpokenText {
-          self.isSpeaking2 = true
-          self.lastSpokenText = self.finalText
+        if !newText.trimmingCharacters(in: .whitespaces).isEmpty {
+          self.lastRecognizedText = fullText
 
-          self.silenceTimer?.invalidate()
-          self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { _ in
-            DispatchQueue.main.async {
-              self.channel?.invokeMethod("onMicText", arguments: ["text": self.lastSpokenText])
-              self.lastSpokenText = ""
-              self.finalText = ""
-              self.isSpeaking2 = false
-            }
+          DispatchQueue.main.async {
+            self.channel?.invokeMethod("onMicText", arguments: ["text": newText])
           }
         }
-
       } else if let error = error {
         print("❌ Speech error: \(error.localizedDescription)")
       }
@@ -512,19 +526,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
   private func makeTranscribeError(code: Int, message: String) -> NSError {
     return NSError(
-      domain: "transcribeAudio",
+      domain: "AudioToolkit",
       code: code,
       userInfo: [NSLocalizedDescriptionKey: message]
     )
-  }
-
-  private func prepareAudioSettings() {
-    audioSettings = [
-      AVSampleRateKey: 48000,
-      AVNumberOfChannelsKey: 2,
-      AVFormatIDKey: kAudioFormatMPEG4AAC,
-      AVEncoderBitRateKey: AudioQuality.high.rawValue * 1000,
-    ]
   }
 
   private func prepareAudioFile(suffix: String = "") throws -> AVAudioFile {
@@ -533,14 +538,11 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     let fileName = "audioToolkit_\(Int(Date().timeIntervalSince1970))\(suffix).\(ext)"
     guard let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
     else {
-      throw makeError(1001, "Không tìm thấy thư mục Downloads")
+      throw self.makeTranscribeError(
+        code: 1001, message: "Không tìm thấy thư mục Downloads")
     }
     return try AVAudioFile(
       forWriting: dir.appendingPathComponent(fileName), settings: audioSettings)
-  }
-
-  private func makeError(_ code: Int, _ message: String) -> NSError {
-    NSError(domain: "AudioToolkit", code: code, userInfo: [NSLocalizedDescriptionKey: message])
   }
 
   func calculateDB(from buffer: AVAudioPCMBuffer) -> Float {

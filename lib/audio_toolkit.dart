@@ -143,7 +143,6 @@ class AudioToolkit {
 
       case 'dbMic':
         double? value = double.tryParse(call.arguments.toString());
-        // print('value: $value');
         if (value != null) {
           _micDbController.add(value);
         }
