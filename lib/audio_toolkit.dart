@@ -138,7 +138,7 @@ class AudioToolkit {
         }
         break;
 
-      case 'db':
+      case 'dbSystem':
         final double? value = double.tryParse(call.arguments.toString());
         if (value != null) {
           _dbAudiodController.add(value);
