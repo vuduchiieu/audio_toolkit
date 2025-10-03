@@ -47,7 +47,7 @@ class AudioToolkit {
 
   AudioToolkit._internal();
 
-  final StreamController<String> _onSystemAudioFileController =
+  final StreamController<String> _onSystemAudioTextController =
       StreamController.broadcast();
 
   final StreamController<double> _dbAudiodController =
@@ -60,7 +60,7 @@ class AudioToolkit {
       StreamController.broadcast();
 
   /// Stream phát hiện đoạn âm thanh từ hệ thống đã được ghi thành file.
-  Stream<String> get onSystemAudio => _onSystemAudioFileController.stream;
+  Stream<String> get onSystemAudio => _onSystemAudioTextController.stream;
 
   /// Stream đo mức âm lượng (dB) của hệ thống.
   Stream<double> get onDbAudio => _dbAudiodController.stream;
@@ -120,22 +120,12 @@ class AudioToolkit {
   Future<NativeMethodResult> turnOffMicRecording() =>
       _invokeNativeMethod('turnOffMicRecording');
 
-  /// Khởi tạo quyền và dịch vụ chuyển âm thanh thành văn bản.
-  Future<NativeMethodResult> initTranscribeAudio() =>
-      _invokeNativeMethod('initTranscribeAudio');
-
-  /// Chuyển đổi file audio tại [path] thành văn bản với ngôn ngữ [language].
-  Future<NativeMethodResult> transcribeAudio(
-          String path, LanguageType language) =>
-      _invokeNativeMethod('transcribeAudio',
-          arguments: {"path": path, "language": language.value});
-
   /// Lắng nghe và xử lý các sự kiện trả về từ native (invokeMethod).
   Future<void> _handleNativeCalls(MethodCall call) async {
     switch (call.method) {
-      case 'onSystemAudioFile':
-        final String path = call.arguments['path'];
-        _onSystemAudioFileController.add(path);
+      case 'onSystemText':
+        final String path = call.arguments['text'];
+        _onSystemAudioTextController.add(path);
         break;
       case 'onMicText':
         _onMicAudioTextController.add(call.arguments['text']);
@@ -166,7 +156,7 @@ class AudioToolkit {
   }
 
   Future<void> dispose() async {
-    _onSystemAudioFileController.close();
+    _onSystemAudioTextController.close();
     _dbAudiodController.close();
     _micDbController.close();
 
