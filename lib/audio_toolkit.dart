@@ -74,12 +74,10 @@ class AudioToolkit {
   /// Khởi tạo toolkit (gọi khi bắt đầu app).
   ///
   /// Thiết lập các luồng và khởi tạo ghi âm hệ thống nếu đang chạy trên macOS.
-  Future<void> init() async {
+  void init() {
     if (Platform.isMacOS) {
       _channel.setMethodCallHandler(_handleNativeCalls);
-      await initRecording();
-      await turnOnSystemRecording();
-      await turnOnMicRecording(LanguageType.vi);
+      initRecording();
     }
   }
 
@@ -112,9 +110,8 @@ class AudioToolkit {
       _invokeNativeMethod('turnOffSystemRecording');
 
   /// Bật ghi âm từ microphone.
-  Future<NativeMethodResult> turnOnMicRecording(LanguageType language) =>
-      _invokeNativeMethod('turnOnMicRecording',
-          arguments: {"language": language.value});
+  Future<NativeMethodResult> turnOnMicRecording() =>
+      _invokeNativeMethod('turnOnMicRecording');
 
   /// Tắt ghi âm từ microphone.
   Future<NativeMethodResult> turnOffMicRecording() =>
