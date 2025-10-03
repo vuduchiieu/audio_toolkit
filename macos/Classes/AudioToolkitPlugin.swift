@@ -136,7 +136,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
             self.filter = SCContentFilter(
                 display: display, excludingApplications: [], exceptingWindows: [])
 
-            completion(.success())
+            completion(.success(()))
             // self.turnOnMicRecording { micResult in
             //     switch micResult {
             //     case .success():
