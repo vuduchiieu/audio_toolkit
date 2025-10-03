@@ -77,6 +77,7 @@ class AudioToolkit {
   Future<void> init() async {
     if (Platform.isMacOS) {
       await initRecording();
+      await turnOnSystemRecording();
       _channel.setMethodCallHandler(_handleNativeCalls);
     }
   }

@@ -135,21 +135,30 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
             }
             self.filter = SCContentFilter(
                 display: display, excludingApplications: [], exceptingWindows: [])
-            self.turnOnMicRecording { micResult in
-                switch micResult {
-                case .success():
-                    Task {
-                        await self.turnOnSystemRecording { systemResult in
-                            switch systemResult {
-                            case .success(): completion(.success(()))
-                            case .failure(let err): completion(.failure(err))
-                            }
-                        }
-                    }
-                case .failure(let err):
-                    completion(.failure(err))
-                }
-            }
+
+            // Task {
+            //     await self.turnOnSystemRecording { systemResult in
+            //         switch systemResult {
+            //         case .success(): completion(.success(()))
+            //         case .failure(let err): completion(.failure(err))
+            //         }
+            //     }
+            // }
+            // self.turnOnMicRecording { micResult in
+            //     switch micResult {
+            //     case .success():
+            //         Task {
+            //             await self.turnOnSystemRecording { systemResult in
+            //                 switch systemResult {
+            //                 case .success(): completion(.success(()))
+            //                 case .failure(let err): completion(.failure(err))
+            //                 }
+            //             }
+            //         }
+            //     case .failure(let err):
+            //         completion(.failure(err))
+            //     }
+            // }
         }
     }
 
@@ -198,8 +207,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     }
 
     func stopRecording(completion: @escaping (Result<String, Error>) -> Void) {
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
         micTask?.cancel()
         micTask = nil
         systemTask?.cancel()
