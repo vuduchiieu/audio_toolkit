@@ -163,38 +163,36 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         }
         do {
 
-            guard let micRequest = micRequest else {
-                return completion(
-                    .failure(makeError(code: 500, message: "Mic request chưa khởi tạo")))
-            }
-            guard let systemRequest = systemRequest else {
-                return completion(
-                    .failure(makeError(code: 500, message: "System request chưa khởi tạo")))
-            }
-            micTask = recognizer.recognitionTask(with: micRequest) {
-                [weak self] result, error in
-                guard let self = self else { return }
-                if let result = result {
-                    let text = result.bestTranscription.formattedString
-                    DispatchQueue.main.async {
-                        self.channel?.invokeMethod("onMicText", arguments: ["text": text])
+            if micRequest != nil {
+                micTask = recognizer.recognitionTask(with: micRequest!) {
+                    [weak self] result, error in
+                    guard let self = self else { return }
+                    if let result = result {
+                        let text = result.bestTranscription.formattedString
+                        DispatchQueue.main.async {
+                            self.channel?.invokeMethod("onMicText", arguments: ["text": text])
+                        }
+                    } else if let error = error {
+                        print("❌ Mic speech error: \(error.localizedDescription)")
                     }
-                } else if let error = error {
-                    print("❌ Mic speech error: \(error.localizedDescription)")
                 }
             }
-            systemTask = recognizer.recognitionTask(with: systemRequest) {
-                [weak self] result, error in
-                guard let self = self else { return }
-                if let result = result {
-                    let text = result.bestTranscription.formattedString
-                    DispatchQueue.main.async {
-                        self.channel?.invokeMethod("onSystemText", arguments: ["text": text])
+
+            if systemRequest != nil {
+                systemTask = recognizer.recognitionTask(with: systemRequest!) {
+                    [weak self] result, error in
+                    guard let self = self else { return }
+                    if let result = result {
+                        let text = result.bestTranscription.formattedString
+                        DispatchQueue.main.async {
+                            self.channel?.invokeMethod("onSystemText", arguments: ["text": text])
+                        }
+                    } else if let error = error {
+                        print("❌ System speech error: \(error.localizedDescription)")
                     }
-                } else if let error = error {
-                    print("❌ System speech error: \(error.localizedDescription)")
                 }
             }
+
             completion(.success(()))
         } catch { completion(.failure(error)) }
     }
@@ -202,30 +200,12 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     func stopRecording(completion: @escaping (Result<String, Error>) -> Void) {
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
-
-        micRequest?.endAudio()
         micTask?.cancel()
-        micRequest = nil
         micTask = nil
-
-        Task {
-            do {
-                if let stream = stream {
-                    try await stream.stopCapture()
-                }
-                systemRequest?.endAudio()
-                systemTask?.cancel()
-                systemRequest = nil
-                systemTask = nil
-                self.stream = nil
-                DispatchQueue.main.async {
-                    completion(.success(""))
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    completion(.failure(error))
-                }
-            }
+        systemTask?.cancel()
+        systemTask = nil
+        DispatchQueue.main.async {
+            completion(.success(""))
         }
     }
 

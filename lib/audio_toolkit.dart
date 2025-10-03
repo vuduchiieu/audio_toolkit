@@ -74,10 +74,10 @@ class AudioToolkit {
   /// Khởi tạo toolkit (gọi khi bắt đầu app).
   ///
   /// Thiết lập các luồng và khởi tạo ghi âm hệ thống nếu đang chạy trên macOS.
-  void init() {
+  Future<void> init() async {
     if (Platform.isMacOS) {
+      await initRecording();
       _channel.setMethodCallHandler(_handleNativeCalls);
-      initRecording();
     }
   }
 
