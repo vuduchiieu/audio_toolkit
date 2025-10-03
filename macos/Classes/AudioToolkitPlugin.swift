@@ -281,13 +281,10 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
             if let result = result {
                 let text = result.bestTranscription.formattedString
                 
-                
-                if result.isFinal {
-                    if text != self.lastRecognizedText {
+               if text != self.lastRecognizedText {
                         self.lastRecognizedText = text
                         DispatchQueue.main.async { self.channel?.invokeMethod("onMicText", arguments: ["text": text]) }
                     }
-                }
                 
              
             } else if let error = error { print("❌ Speech error: \(error.localizedDescription)") }
