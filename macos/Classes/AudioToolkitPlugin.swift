@@ -83,7 +83,6 @@ public class AudioToolkitPlugin: NSObject, FlutterPlugin {
                     }
                 }
             }
-       
         default:
             result(["result": "false", "errorMessage": "Method không hợp lệ"])
         }
@@ -98,21 +97,21 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     var channel: FlutterMethodChannel?
     private var stream: SCStream?
     private var audioSettings: [String: Any] = [:]
-    private var selectedFormat: AudioFormat = .aac
-    private var filter: SCContentFilter?
 
-    // --- Speech recognition cho MIC
+    private var audioEngine: AVAudioEngine?
+    
+    // Mic
     private var micRequest: SFSpeechAudioBufferRecognitionRequest?
     private var micTask: SFSpeechRecognitionTask?
-    private var audioEngine: AVAudioEngine?
-    private var lastMicText = ""
-
-    // --- Speech recognition cho SYSTEM
+    
+    // System
     private var systemRequest: SFSpeechAudioBufferRecognitionRequest?
     private var systemTask: SFSpeechRecognitionTask?
-    private var lastSystemText = ""
 
+    private var filter: SCContentFilter?
     private var isRecording = false
+    private var isMicRecording = false
+
     private let speechQueue = DispatchQueue(label: "audioToolkit.speechQueue")
 
     init(channel: FlutterMethodChannel?) {
@@ -135,95 +134,94 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     func startRecording(language: String, completion: @escaping (Result<Void, Error>) -> Void) async {
         do {
             isRecording = true
-            try await setupMicRecognition(language: language)
-            try await setupSystemRecognition(language: language)
+            // chỉ bật flag, recognition xử lý riêng trong mic/system
             completion(.success(()))
         } catch { completion(.failure(error)) }
     }
 
     func stopRecording(completion: @escaping (Result<String, Error>) -> Void) {
         isRecording = false
-
-        // MIC
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
         micRequest?.endAudio()
         micTask?.cancel()
-        micRequest = nil
-        micTask = nil
-        lastMicText = ""
-
-        // SYSTEM
         systemRequest?.endAudio()
         systemTask?.cancel()
+        micRequest = nil
+        micTask = nil
         systemRequest = nil
         systemTask = nil
-        lastSystemText = ""
-        Task { try? await stream?.stopCapture() }
-        stream = nil
-
         completion(.success(""))
     }
 
-    // MARK: - MIC
-    private func setupMicRecognition(language: String) async throws {
-        let recognizer = try await makeRecognizer(language: language)
-
+    // MARK: - Microphone
+    func turnOnMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+        audioEngine = AVAudioEngine()
+        guard let inputNode = audioEngine?.inputNode else {
+            return completion(.failure(makeError(code: 500, message: "Không khởi tạo được audio engine")))
+        }
+        isMicRecording = true
+        
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN")), recognizer.isAvailable else {
+            return completion(.failure(makeError(code: 402, message: "Speech Recognizer không khả dụng")))
+        }
         micRequest = SFSpeechAudioBufferRecognitionRequest()
         micRequest?.shouldReportPartialResults = true
         micTask = recognizer.recognitionTask(with: micRequest!) { [weak self] result, error in
             guard let self = self else { return }
             if let result = result {
                 let text = result.bestTranscription.formattedString
-                if text != self.lastMicText {
-                    self.lastMicText = text
-                    DispatchQueue.main.async {
-                        self.channel?.invokeMethod("onMicText", arguments: ["text": text])
-                    }
+                DispatchQueue.main.async {
+                    self.channel?.invokeMethod("onMicText", arguments: ["text": text])
                 }
-            } else if let error = error { print("❌ Mic Speech error: \(error.localizedDescription)") }
+            } else if let error = error {
+                print("❌ Mic speech error: \(error.localizedDescription)")
+            }
         }
-
-        audioEngine = AVAudioEngine()
-        guard let inputNode = audioEngine?.inputNode else {
-            throw makeError(code: 500, message: "Không khởi tạo được audio engine")
-        }
+        
         let format = inputNode.outputFormat(forBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, _ in
-            guard let self = self else { return }
-            let db = self.calculateDB(from: buffer)
-            DispatchQueue.main.async {
-                self.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
-            }
-            if self.isRecording {
-                self.speechQueue.async { self.micRequest?.append(buffer) }
+            self?.micRequest?.append(buffer)
+            if let db = self?.calculateDB(from: buffer) {
+                DispatchQueue.main.async {
+                    self?.channel?.invokeMethod("dbMic", arguments: String(format: "%.2f", db))
+                }
             }
         }
-        try audioEngine?.start()
+        do { try audioEngine?.start(); completion(.success(())) } catch { completion(.failure(error)) }
     }
 
-    // MARK: - SYSTEM
-    private func setupSystemRecognition(language: String) async throws {
-        let recognizer = try await makeRecognizer(language: language)
+    func turnOffMicRecording(completion: @escaping (Result<Void, Error>) -> Void) {
+        audioEngine?.stop()
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        micRequest?.endAudio()
+        micTask?.cancel()
+        micRequest = nil
+        micTask = nil
+        completion(.success(()))
+    }
 
+    // MARK: - System Audio
+    func turnOnSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
+        guard let filter = filter else {
+            return completion(.failure(makeError(code: 404, message: "Chưa initRecording")))
+        }
+        
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "vi-VN")), recognizer.isAvailable else {
+            return completion(.failure(makeError(code: 402, message: "Speech Recognizer không khả dụng")))
+        }
         systemRequest = SFSpeechAudioBufferRecognitionRequest()
         systemRequest?.shouldReportPartialResults = true
         systemTask = recognizer.recognitionTask(with: systemRequest!) { [weak self] result, error in
             guard let self = self else { return }
             if let result = result {
                 let text = result.bestTranscription.formattedString
-                if text != self.lastSystemText {
-                    self.lastSystemText = text
-                    DispatchQueue.main.async {
-                        self.channel?.invokeMethod("onSystemText", arguments: ["text": text])
-                    }
+                DispatchQueue.main.async {
+                    self.channel?.invokeMethod("onSystemText", arguments: ["text": text])
                 }
-            } else if let error = error { print("❌ System Speech error: \(error.localizedDescription)") }
+            } else if let error = error {
+                print("❌ System speech error: \(error.localizedDescription)")
+            }
         }
-
-        guard let filter = filter else {
-            throw makeError(code: 404, message: "Chưa initRecording")
-        }
+        
         audioSettings = [
             AVSampleRateKey: 48000,
             AVNumberOfChannelsKey: 2,
@@ -231,6 +229,19 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
             AVEncoderBitRateKey: AudioQuality.high.rawValue * 1000
         ]
         await startSCStream(filter: filter)
+        completion(.success(()))
+    }
+
+    func turnOffSystemRecording(completion: @escaping (Result<Void, Error>) -> Void) async {
+        do {
+            try await stream?.stopCapture()
+            systemRequest?.endAudio()
+            systemTask?.cancel()
+            systemRequest = nil
+            systemTask = nil
+            stream = nil
+            completion(.success(()))
+        } catch { completion(.failure(makeError(code: 404, message: error.localizedDescription))) }
     }
 
     func startSCStream(filter: SCContentFilter) async {
@@ -250,27 +261,15 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         guard outputType == .audio, let pcmBuffer = sampleBuffer.toPCMBuffer() else { return }
-        let db = calculateDB(from: pcmBuffer)
-        DispatchQueue.main.async {
-            self.channel?.invokeMethod("dbSystem", arguments: String(format: "%.2f", db))
+        if let db = calculateDB(from: pcmBuffer) as Float? {
+            DispatchQueue.main.async {
+                self.channel?.invokeMethod("dbSystem", arguments: String(format: "%.2f", db))
+            }
         }
-        if isRecording {
-            speechQueue.async { self.systemRequest?.append(pcmBuffer) }
-        }
+        systemRequest?.append(pcmBuffer)
     }
-
+    
     // MARK: - Helpers
-    private func makeRecognizer(language: String) async throws -> SFSpeechRecognizer {
-        let status = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
-        }
-        guard status == .authorized else { throw makeError(code: 402, message: "Speech recognition bị từ chối") }
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language)), recognizer.isAvailable else {
-            throw makeError(code: 402, message: "Speech Recognizer không khả dụng")
-        }
-        return recognizer
-    }
-
     private func makeError(code: Int, message: String) -> NSError {
         NSError(domain: "AudioToolkit", code: code, userInfo: [NSLocalizedDescriptionKey: message])
     }
@@ -283,7 +282,6 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         return db.isFinite ? db : -60
     }
 }
-
 
 @available(macOS 13.0, *)
 extension CMSampleBuffer {
