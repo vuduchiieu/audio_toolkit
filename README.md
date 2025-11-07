@@ -1,4 +1,3 @@
-
 # 🎧 AUDIO TOOLKIT
 
 > 📦 A Flutter plugin for **macOS 13+** to record **system audio**, **microphone**, and **transcribe voice to text** using built-in speech recognition.
@@ -10,7 +9,7 @@ Perfect for building **voice assistants**, **audio analysis**, and **screen/audi
 
 ## 🧠 Features
 
-- 🎙️ **System Audio Recording (macOS only)**
+- 🎙️ **Capture System Audio Recording(macOS only)**
 - 🎤 **Microphone Recording**
 - 🗣️ **Speech-to-Text Transcription**
   - Transcribe recorded files to text
@@ -26,6 +25,7 @@ Perfect for building **voice assistants**, **audio analysis**, and **screen/audi
 This plugin requires specific permissions & capabilities:
 
 ### 1. App Sandbox – Downloads Folder Access
+
 > **Xcode** → **Signing & Capabilities** → **App Sandbox** → Enable **User Selected File** → Add **Downloads Folder**
 
 ![sandbox config](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/1.jpg)
@@ -33,6 +33,7 @@ This plugin requires specific permissions & capabilities:
 ---
 
 ### 2. Enable Hardened Runtime – Audio Input
+
 > **Xcode** → **Signing & Capabilities** → **Hardened Runtime** → Enable **Audio Input**
 
 ![runtime config](https://raw.githubusercontent.com/vuduchiieu/audio_toolkit/main/images/2.jpg)
